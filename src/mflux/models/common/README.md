@@ -28,7 +28,7 @@ This README covers stable, shared patterns. For model-specific usage, see each m
 
 ## Quantization
 
-Quantization reduces memory use and speeds up inference. Most models support `--quantize` (3, 4, 5, 6, 8). This is the on-the-fly option, and quantization is performed as weights are loaded.
+Quantization reduces memory use and speeds up inference. Most models support `--quantize` (3, 4, 5, 6, 8). This is the on-the-fly option, and quantization is performed as weights are loaded. By default, mflux uses MLX's `affine` quantization mode.
 
 ```sh
 mflux-generate-z-image-turbo \
@@ -55,13 +55,15 @@ image.save("dog.png")
 ```
 </details>
 
-### Saving a quantized model
+To use MLX's newer quantization modes, pass `--q-mode`. Supported modes are `affine`, `mxfp4`, `nvfp4`, and `mxfp8`; `mxfp4`/`nvfp4` infer `--quantize 4`, and `mxfp8` infers `--quantize 8`. You can still pass a compatible explicit `--quantize` value if preferred.
 
 ```sh
-mflux-save \
-  --path "/Users/me/models/z-image-turbo_8bit" \
+mflux-generate-z-image-turbo \
   --model z-image-turbo \
-  --quantize 8
+  --q-mode mxfp4 \
+  --q-group-size 32 \
+  --steps 9 \
+  --prompt "A photo of a dog"
 ```
 
 <details>
@@ -71,7 +73,37 @@ mflux-save \
 from mflux.models.common.config import ModelConfig
 from mflux.models.z_image import ZImageTurbo
 
-model = ZImageTurbo(quantize=8, model_config=ModelConfig.z_image_turbo())
+model = ZImageTurbo(
+    q_mode="mxfp4",
+    q_group_size=32,
+    model_config=ModelConfig.z_image_turbo(),
+)
+image = model.generate_image(
+    seed=42,
+    prompt="A photo of a dog",
+    num_inference_steps=9,
+)
+image.save("dog.png")
+```
+</details>
+
+### Saving a quantized model
+
+```sh
+mflux-save \
+  --path "/Users/me/models/z-image-turbo_8bit" \
+  --model z-image-turbo \
+  --q-mode mxfp8
+```
+
+<details>
+<summary>Python API</summary>
+
+```python
+from mflux.models.common.config import ModelConfig
+from mflux.models.z_image import ZImageTurbo
+
+model = ZImageTurbo(q_mode="mxfp8", model_config=ModelConfig.z_image_turbo())
 model.save_model("/Users/me/models/z-image-turbo_8bit")
 ```
 </details>

@@ -1,3 +1,4 @@
+from mflux.models.common.resolution.quantization_config import QuantizationConfig
 from mflux.models.common.tokenizer import TokenizerLoader
 from mflux.models.common.weights.loading.loaded_weights import LoadedWeights
 from mflux.models.common.weights.loading.weight_applier import WeightApplier
@@ -11,14 +12,14 @@ class FiboVLMInitializer:
     @staticmethod
     def init(
         model,
+        quantization: QuantizationConfig,
         model_path: str = "briaai/FIBO-vlm",
-        quantize: int | None = None,
     ) -> None:
         FiboVLMInitializer._init_config(model, model_path)
         weights = FiboVLMInitializer._load_weights(model_path)
         FiboVLMInitializer._init_tokenizers(model, model_path)
         FiboVLMInitializer._init_models(model)
-        FiboVLMInitializer._apply_weights(model, weights, quantize)
+        FiboVLMInitializer._apply_weights(model, weights, quantization)
 
     @staticmethod
     def _init_config(model, model_path: str) -> None:
@@ -43,13 +44,18 @@ class FiboVLMInitializer:
         model.decoder = Qwen3VLDecoder(visual=Qwen3VLVisionModel())
 
     @staticmethod
-    def _apply_weights(model, weights: LoadedWeights, quantize: int | None) -> None:
-        model.bits = WeightApplier.apply_and_quantize(
+    def _apply_weights(
+        model,
+        weights: LoadedWeights,
+        quantization: QuantizationConfig,
+    ) -> None:
+        quantization = WeightApplier.apply_and_quantize(
             weights=weights,
-            quantize_arg=quantize,
+            quantization=quantization,
             weight_definition=FIBOVLMWeightDefinition,
             models={
                 "decoder": model.decoder,
                 "visual": model.decoder.visual,
             },
         )
+        WeightApplier.set_quantization_state(model, quantization)

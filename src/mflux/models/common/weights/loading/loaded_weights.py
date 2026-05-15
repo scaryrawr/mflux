@@ -1,10 +1,35 @@
 from dataclasses import dataclass
 
+from mflux.models.common.resolution.quantization_config import QuantizationConfig
+
 
 @dataclass
 class MetaData:
     quantization_level: int | None = None
+    quantization_mode: str | None = None
+    quantization_group_size: int | None = None
     mflux_version: str | None = None
+
+    @property
+    def has_mflux_metadata(self) -> bool:
+        return self.quantization_level is not None or self.mflux_version is not None
+
+    @property
+    def quantization(self) -> QuantizationConfig:
+        return QuantizationConfig.from_stored(
+            quantization_level=self.quantization_level,
+            quantization_mode=self.quantization_mode,
+            quantization_group_size=self.quantization_group_size,
+        )
+
+    @classmethod
+    def from_quantization(cls, quantization: QuantizationConfig, mflux_version: str | None = None) -> "MetaData":
+        return cls(
+            quantization_level=quantization.bits,
+            quantization_mode=quantization.metadata_mode,
+            quantization_group_size=quantization.metadata_group_size,
+            mflux_version=mflux_version,
+        )
 
 
 @dataclass

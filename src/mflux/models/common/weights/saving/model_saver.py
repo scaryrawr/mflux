@@ -9,6 +9,7 @@ from tqdm import tqdm
 from transformers import PreTrainedTokenizer
 
 from mflux.models.common.lora.mapping.lora_saver import LoRASaver
+from mflux.models.common.resolution.quantization_config import QuantizationConfig
 from mflux.utils.version_util import VersionUtil
 
 if TYPE_CHECKING:
@@ -19,7 +20,7 @@ class ModelSaver:
     @staticmethod
     def save_model(
         model: Any,
-        bits: int,
+        quantization: QuantizationConfig,
         base_path: str,
         weight_definition: "WeightDefinitionType",
     ) -> None:
@@ -38,7 +39,7 @@ class ModelSaver:
             if component is not None:
                 # Bake and strip any LoRA wrappers to avoid duplicating shared weights
                 LoRASaver.bake_and_strip_lora(component)
-                ModelSaver._save_weights(base_path, bits, component, subdir)
+                ModelSaver._save_weights(base_path, quantization, component, subdir)
 
     @staticmethod
     def _save_tokenizer(base_path: str, tokenizer: PreTrainedTokenizer, subdir: str) -> None:
@@ -47,7 +48,7 @@ class ModelSaver:
         tokenizer.save_pretrained(path)
 
     @staticmethod
-    def _save_weights(base_path: str, bits: int, model: nn.Module, subdir: str) -> None:
+    def _save_weights(base_path: str, quantization: QuantizationConfig, model: nn.Module, subdir: str) -> None:
         path = Path(base_path) / subdir
         path.mkdir(parents=True, exist_ok=True)
         weights = dict(tree_flatten(model.parameters()))
@@ -61,10 +62,7 @@ class ModelSaver:
             mx.save_safetensors(
                 str(path / shard_filename),
                 shard,
-                {
-                    "quantization_level": str(bits),
-                    "mflux_version": VersionUtil.get_mflux_version(),
-                },
+                ModelSaver._metadata(quantization),
             )
             # Record which file each weight belongs to
             for key in shard.keys():
@@ -73,14 +71,18 @@ class ModelSaver:
         # Write model.safetensors.index.json for HuggingFace compatibility
         # This ensures the saved model works even if custom metadata is stripped
         index_data = {
-            "metadata": {
-                "quantization_level": str(bits),
-                "mflux_version": VersionUtil.get_mflux_version(),
-            },
+            "metadata": ModelSaver._metadata(quantization),
             "weight_map": weight_map,
         }
         with open(path / "model.safetensors.index.json", "w") as f:
             json.dump(index_data, f, indent=2)
+
+    @staticmethod
+    def _metadata(quantization: QuantizationConfig) -> dict:
+        return {
+            **quantization.to_model_metadata(),
+            "mflux_version": VersionUtil.get_mflux_version(),
+        }
 
     @staticmethod
     def _split_weights(weights: dict, max_file_size_gb: int = 2) -> list[dict]:

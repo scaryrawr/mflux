@@ -83,7 +83,7 @@ def main():
 
     # 3. Load the SeedVR2 model
     model = SeedVR2(
-        quantize=args.quantize,
+        quantization=args.quantization,
         model_path=resolved_model_path,
         model_config=model_config,
     )

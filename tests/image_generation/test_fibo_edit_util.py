@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
+from mflux.models.common.resolution.quantization_config import QuantizationConfig
 from mflux.models.fibo.variants.edit import util as fibo_edit_util_module
 from mflux.models.fibo.variants.edit.util import FIBO_EDIT_RMBG_DEFAULT_JSON_PROMPT, FiboEditUtil
 
@@ -41,7 +42,7 @@ def test_load_edit_image_raises_for_mask_size_mismatch(tmp_path):
 def test_get_json_prompt_for_edit_returns_existing_json():
     args = SimpleNamespace(prompt='{"short_description":"owl","edit_instruction":"make it white"}', prompt_file=None)
 
-    prompt = FiboEditUtil.get_json_prompt_for_edit(args, quantize=None)
+    prompt = FiboEditUtil.get_json_prompt_for_edit(args, quantization=QuantizationConfig.from_request(quantize=None))
 
     assert json.loads(prompt)["edit_instruction"] == "make it white"
 
@@ -50,7 +51,7 @@ def test_get_json_prompt_for_edit_requires_prompt_input():
     args = SimpleNamespace(prompt=None, prompt_file=None, image_path="input.png", mask_path=None)
 
     with pytest.raises(ValueError, match="requires an edit instruction via --prompt/--prompt-file"):
-        FiboEditUtil.get_json_prompt_for_edit(args, quantize=None)
+        FiboEditUtil.get_json_prompt_for_edit(args, quantization=QuantizationConfig.from_request(quantize=None))
 
 
 def test_get_json_prompt_for_edit_uses_default_when_missing():
@@ -58,7 +59,7 @@ def test_get_json_prompt_for_edit_uses_default_when_missing():
 
     prompt = FiboEditUtil.get_json_prompt_for_edit(
         args,
-        quantize=None,
+        quantization=QuantizationConfig.from_request(quantize=None),
         default_json_prompt_if_missing=FIBO_EDIT_RMBG_DEFAULT_JSON_PROMPT,
     )
 
@@ -69,7 +70,7 @@ def test_get_json_prompt_for_edit_requires_image_for_natural_language_prompt():
     args = SimpleNamespace(prompt="turn the owl white", prompt_file=None, image_path=None, mask_path=None)
 
     with pytest.raises(ValueError, match="requires --image-path"):
-        FiboEditUtil.get_json_prompt_for_edit(args, quantize=None)
+        FiboEditUtil.get_json_prompt_for_edit(args, quantization=QuantizationConfig.from_request(quantize=None))
 
 
 def test_get_json_prompt_for_edit_routes_image_and_mask_to_vlm(monkeypatch, tmp_path):
@@ -81,8 +82,8 @@ def test_get_json_prompt_for_edit_routes_image_and_mask_to_vlm(monkeypatch, tmp_
     captured = {}
 
     class _FakeVLM:
-        def __init__(self, quantize):
-            captured["quantize"] = quantize
+        def __init__(self, quantization):
+            captured["quantization"] = quantization
 
         def edit(self, image, edit_instruction, use_mask, seed):
             captured["image"] = image
@@ -93,11 +94,12 @@ def test_get_json_prompt_for_edit_routes_image_and_mask_to_vlm(monkeypatch, tmp_
 
     monkeypatch.setattr(fibo_edit_util_module, "FiboVLM", _FakeVLM)
     args = SimpleNamespace(prompt="turn the owl white", prompt_file=None, image_path=image_path, mask_path=mask_path)
+    quantization = QuantizationConfig.from_request(quantize=8, q_mode="mxfp8", q_group_size=32)
 
-    prompt = FiboEditUtil.get_json_prompt_for_edit(args, quantize=8)
+    prompt = FiboEditUtil.get_json_prompt_for_edit(args, quantization=quantization)
 
     assert json.loads(prompt)["edit_instruction"] == "make it white"
-    assert captured["quantize"] == 8
+    assert captured["quantization"] == quantization
     assert captured["edit_instruction"] == "turn the owl white"
     assert captured["use_mask"] is True
     assert captured["seed"] == 42

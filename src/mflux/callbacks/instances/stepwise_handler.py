@@ -92,6 +92,8 @@ class StepwiseHandler(BeforeLoopCallback, InLoopCallback, InterruptCallback):
             seed=seed,
             prompt=prompt,
             quantization=self.model.bits,
+            q_mode=self.model.q_mode,
+            q_group_size=self.model.q_group_size,
             lora_paths=self.model.lora_paths,
             lora_scales=self.model.lora_scales,
             generation_time=generation_time,

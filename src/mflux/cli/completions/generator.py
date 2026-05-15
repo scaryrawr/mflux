@@ -203,6 +203,7 @@ class CompletionGenerator:
             parser.add_argument("--instructions", type=str, required=True, help="Text instructions for refinement")
             parser.add_argument("--output", type=Path, help="Output path for refined JSON prompt")
             parser.add_argument("--path", type=str, help="Local path for VLM model")
+            parser._add_quantization_arguments()
             parser.add_argument("--top-p", type=float, help="Top-p sampling for VLM")
             parser.add_argument("--temperature", type=float, help="Temperature for VLM")
             parser.add_argument("--max-tokens", type=int, help="Max tokens for VLM generation")
@@ -213,6 +214,7 @@ class CompletionGenerator:
             parser.add_argument("--prompt", type=str, help="Optional text prompt to blend with the image")
             parser.add_argument("--output", type=Path, help="Output path for generated JSON prompt")
             parser.add_argument("--path", type=str, help="Local path for VLM model")
+            parser._add_quantization_arguments()
             parser.add_argument("--top-p", type=float, help="Top-p sampling for VLM")
             parser.add_argument("--temperature", type=float, help="Temperature for VLM")
             parser.add_argument("--max-tokens", type=int, help="Max tokens for VLM generation")
@@ -345,6 +347,8 @@ class CompletionGenerator:
             return ":model:_mflux_models"
         elif action.dest == "quantize":
             return ":quantization:_mflux_quantize"
+        elif action.dest == "q_mode":
+            return ":quantization mode:_mflux_q_modes"
         elif action.dest == "lora_style":
             return ":style:_mflux_lora_styles"
 
@@ -438,6 +442,13 @@ class CompletionGenerator:
         helpers.append(f"""_mflux_quantize() {{
     _values 'quantization' \\
         {quant_choices}
+}}
+""")
+
+        q_mode_choices = " ".join(f"'{mode}[{mode} quantization mode]'" for mode in ui_defaults.Q_MODE_CHOICES)
+        helpers.append(f"""_mflux_q_modes() {{
+    _values 'quantization mode' \\
+        {q_mode_choices}
 }}
 """)
 

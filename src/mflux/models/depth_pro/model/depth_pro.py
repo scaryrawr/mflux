@@ -6,6 +6,7 @@ import mlx.core as mx
 import numpy as np
 from PIL import Image
 
+from mflux.models.common.resolution.quantization_config import QuantizationConfig
 from mflux.models.depth_pro.depth_pro_initializer import DepthProInitializer
 from mflux.models.depth_pro.model.depth_pro_model import DepthProModel
 from mflux.models.depth_pro.model.depth_pro_util import DepthProUtil
@@ -21,9 +22,24 @@ class DepthResult:
 
 
 class DepthPro:
-    def __init__(self, quantize: int | None = None):
+    def __init__(
+        self,
+        quantize: int | None = None,
+        *,
+        q_mode: str | None = None,
+        q_group_size: int | None = None,
+        quantization: QuantizationConfig | None = None,
+    ):
         self._depth_pro_model = DepthProModel()
-        DepthProInitializer.init(self._depth_pro_model, quantize=quantize)
+        quantization = quantization or QuantizationConfig.from_request(
+            quantize=quantize,
+            q_mode=q_mode,
+            q_group_size=q_group_size,
+        )
+        DepthProInitializer.init(
+            self._depth_pro_model,
+            quantization=quantization,
+        )
 
     def create_depth_map(self, image_path: str | Path) -> DepthResult:
         if not os.path.exists(image_path):

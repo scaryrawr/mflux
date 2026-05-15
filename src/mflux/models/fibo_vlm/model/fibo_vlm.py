@@ -6,6 +6,7 @@ import mlx.core as mx
 import numpy as np
 from PIL import Image
 
+from mflux.models.common.resolution.quantization_config import QuantizationConfig
 from mflux.models.common_models.qwen3_vl.qwen3_vl_decoder import Qwen3VLDecoder
 from mflux.models.common_models.qwen3_vl.qwen3_vl_util import Qwen3VLUtil
 from mflux.models.fibo_vlm.fibo_vlm_initializer import FiboVLMInitializer
@@ -152,11 +153,20 @@ class FiboVLM:
         model_id: str = "briaai/FIBO-vlm",
         model_path: str | None = None,
         quantize: int | None = None,
+        *,
+        q_mode: str | None = None,
+        q_group_size: int | None = None,
+        quantization: QuantizationConfig | None = None,
     ):
+        quantization = quantization or QuantizationConfig.from_request(
+            quantize=quantize,
+            q_mode=q_mode,
+            q_group_size=q_group_size,
+        )
         FiboVLMInitializer.init(
             model=self,
             model_path=model_path if model_path else model_id,
-            quantize=quantize,
+            quantization=quantization,
         )
 
     @property

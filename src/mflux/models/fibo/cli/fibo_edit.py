@@ -48,7 +48,7 @@ def _json_prompt_for_edit(args, model_config: ModelConfig) -> str:
     default_if_missing = FIBO_EDIT_RMBG_DEFAULT_JSON_PROMPT if _is_rmbg(model_config) else None
     return FiboEditUtil.get_json_prompt_for_edit(
         args,
-        quantize=args.quantize,
+        quantization=args.quantization,
         default_json_prompt_if_missing=default_if_missing,
     )
 
@@ -102,7 +102,7 @@ def main():
     json_prompt = _json_prompt_for_edit(args, model_config)
 
     fibo_edit = FIBOEdit(
-        quantize=args.quantize,
+        quantization=args.quantization,
         model_path=args.model_path,
         lora_paths=args.lora_paths,
         lora_scales=args.lora_scales,

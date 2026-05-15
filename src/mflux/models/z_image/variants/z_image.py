@@ -7,6 +7,7 @@ from PIL import Image
 from mflux.models.common.config.config import Config
 from mflux.models.common.config.model_config import ModelConfig
 from mflux.models.common.latent_creator.latent_creator import Img2Img, LatentCreator
+from mflux.models.common.resolution.quantization_config import QuantizationConfig
 from mflux.models.common.vae.vae_util import VAEUtil
 from mflux.models.common.weights.saving.model_saver import ModelSaver
 from mflux.models.z_image.latent_creator import ZImageLatentCreator
@@ -33,15 +34,24 @@ class ZImage(nn.Module):
         lora_paths: list[str] | None = None,
         lora_scales: list[float] | None = None,
         model_config: ModelConfig = ModelConfig.z_image_turbo(),
+        *,
+        q_mode: str | None = None,
+        q_group_size: int | None = None,
+        quantization: QuantizationConfig | None = None,
     ):
         super().__init__()
+        quantization = quantization or QuantizationConfig.from_request(
+            quantize=quantize,
+            q_mode=q_mode,
+            q_group_size=q_group_size,
+        )
         ZImageInitializer.init(
             model=self,
-            quantize=quantize,
             model_path=model_path,
             lora_paths=lora_paths,
             lora_scales=lora_scales,
             model_config=model_config,
+            quantization=quantization,
         )
 
     def generate_image(
@@ -140,6 +150,8 @@ class ZImage(nn.Module):
             seed=seed,
             prompt=prompt,
             quantization=self.bits,
+            q_mode=self.q_mode,
+            q_group_size=self.q_group_size,
             lora_paths=self.lora_paths,
             lora_scales=self.lora_scales,
             image_path=config.image_path,
@@ -177,7 +189,7 @@ class ZImage(nn.Module):
     def save_model(self, base_path: str) -> None:
         ModelSaver.save_model(
             model=self,
-            bits=self.bits,
+            quantization=self.quantization,
             base_path=base_path,
             weight_definition=ZImageWeightDefinition,
         )

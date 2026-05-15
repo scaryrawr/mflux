@@ -1,6 +1,7 @@
 from mflux.callbacks.callback_registry import CallbackRegistry
 from mflux.models.common.config import ModelConfig
 from mflux.models.common.lora.mapping.lora_loader import LoRALoader
+from mflux.models.common.resolution.quantization_config import QuantizationConfig
 from mflux.models.common.tokenizer import TokenizerLoader
 from mflux.models.common.weights.loading.loaded_weights import LoadedWeights
 from mflux.models.common.weights.loading.weight_applier import WeightApplier
@@ -21,7 +22,7 @@ class QwenImageInitializer:
     def init(
         model,
         model_config: ModelConfig,
-        quantize: int | None,
+        quantization: QuantizationConfig,
         model_path: str | None = None,
         lora_paths: list[str] | None = None,
         lora_scales: list[float] | None = None,
@@ -31,14 +32,14 @@ class QwenImageInitializer:
         weights = QwenImageInitializer._load_weights(path)
         QwenImageInitializer._init_tokenizers(model, path)
         QwenImageInitializer._init_models(model)
-        QwenImageInitializer._apply_weights(model, weights, quantize)
+        QwenImageInitializer._apply_weights(model, weights, quantization)
         QwenImageInitializer._apply_lora(model, lora_paths, lora_scales)
 
     @staticmethod
     def init_edit(
         model,
         model_config: ModelConfig,
-        quantize: int | None,
+        quantization: QuantizationConfig,
         model_path: str | None = None,
         lora_paths: list[str] | None = None,
         lora_scales: list[float] | None = None,
@@ -49,7 +50,7 @@ class QwenImageInitializer:
         weights = QwenImageInitializer._load_weights(path)
         QwenImageInitializer._init_tokenizers(model, path)
         QwenImageInitializer._init_edit_models(model)
-        QwenImageInitializer._apply_weights(model, weights, quantize)
+        QwenImageInitializer._apply_weights(model, weights, quantization)
         QwenImageInitializer._apply_lora(model, lora_paths, lora_scales)
 
         # Add vision-language tokenizer
@@ -97,10 +98,14 @@ class QwenImageInitializer:
         model.text_encoder.encoder.visual = VisionTransformer()
 
     @staticmethod
-    def _apply_weights(model, weights: LoadedWeights, quantize: int | None) -> None:
-        model.bits = WeightApplier.apply_and_quantize(
+    def _apply_weights(
+        model,
+        weights: LoadedWeights,
+        quantization: QuantizationConfig,
+    ) -> None:
+        quantization = WeightApplier.apply_and_quantize(
             weights=weights,
-            quantize_arg=quantize,
+            quantization=quantization,
             weight_definition=QwenWeightDefinition,
             models={
                 "vae": model.vae,
@@ -108,6 +113,7 @@ class QwenImageInitializer:
                 "text_encoder": model.text_encoder,
             },
         )
+        WeightApplier.set_quantization_state(model, quantization)
 
     @staticmethod
     def _apply_lora(model, lora_paths: list[str] | None, lora_scales: list[float] | None) -> None:

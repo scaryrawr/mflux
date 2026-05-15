@@ -40,7 +40,7 @@ def main():
 
     model = Flux2KleinEdit(
         model_config=model_config,
-        quantize=args.quantize,
+        quantization=args.quantization,
         model_path=args.model_path,
         lora_paths=args.lora_paths,
         lora_scales=args.lora_scales,

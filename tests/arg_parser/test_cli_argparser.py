@@ -1,12 +1,14 @@
 import json
 import random
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 
 from mflux.cli.defaults import defaults as ui_defaults
 from mflux.cli.parser.parsers import CommandLineParser
+from mflux.models.common.resolution.quantization_config import QuantizationConfig
 from mflux.models.fibo.cli.fibo_edit import _resolve_fibo_edit_model_config
 from mflux.utils.box_values import BoxValues
 from mflux.utils.scale_factor import ScaleFactor
@@ -357,10 +359,190 @@ def test_quantize_arg(mflux_generate_parser, mflux_generate_minimal_argv, base_m
     with patch('sys.argv', mflux_generate_minimal_argv + ['--config-from-metadata', metadata_file.as_posix()]):  # fmt: off
         args = mflux_generate_parser.parse_args()
         assert args.quantize == 4
+        assert args.quantization.bits == 4
+        assert args.quantization.mode == "affine"
+        assert args.quantization.group_size is None
     # test CLI override
     with patch('sys.argv', mflux_generate_minimal_argv + ['--quantize', '8', '--config-from-metadata', metadata_file.as_posix()]):  # fmt: off
         args = mflux_generate_parser.parse_args()
         assert args.quantize == 8
+        assert args.quantization.bits == 8
+        assert args.quantization.mode == "affine"
+        assert args.quantization.group_size is None
+
+
+@pytest.mark.fast
+def test_q_mode_args(mflux_generate_parser, mflux_generate_minimal_argv):
+    with patch("sys.argv", mflux_generate_minimal_argv + ["--q-mode", "mxfp4"]):
+        args = mflux_generate_parser.parse_args()
+        assert args.quantize == 4
+        assert args.q_mode == "mxfp4"
+        assert args.q_group_size is None
+        assert args.quantization.bits == 4
+        assert args.quantization.mode == "mxfp4"
+        assert args.quantization.group_size is None
+
+    with patch("sys.argv", mflux_generate_minimal_argv + ["--q-mode", "nvfp4"]):
+        args = mflux_generate_parser.parse_args()
+        assert args.quantize == 4
+        assert args.q_mode == "nvfp4"
+        assert args.q_group_size is None
+        assert args.quantization.bits == 4
+        assert args.quantization.mode == "nvfp4"
+        assert args.quantization.group_size is None
+
+    with patch(
+        "sys.argv",
+        mflux_generate_minimal_argv + ["--q-mode", "mxfp8", "--q-group-size", "32"],
+    ):
+        args = mflux_generate_parser.parse_args()
+        assert args.quantize == 8
+        assert args.q_mode == "mxfp8"
+        assert args.q_group_size == 32
+        assert args.quantization.bits == 8
+        assert args.quantization.mode == "mxfp8"
+        assert args.quantization.group_size == 32
+
+
+@pytest.mark.fast
+def test_quantization_metadata_normalizes_mode_and_group_size(
+    mflux_generate_parser,
+    mflux_generate_minimal_argv,
+    base_metadata_dict,
+    temp_dir,
+):
+    metadata_file = temp_dir / "quantization_mode.json"
+    with metadata_file.open("wt") as m:
+        base_metadata_dict["quantize"] = 8
+        base_metadata_dict["q_mode"] = "mxfp8"
+        base_metadata_dict["q_group_size"] = 32
+        json.dump(base_metadata_dict, m, indent=4)
+
+    with patch("sys.argv", mflux_generate_minimal_argv + ["--config-from-metadata", metadata_file.as_posix()]):
+        args = mflux_generate_parser.parse_args()
+
+    assert args.quantize == 8
+    assert args.q_mode == "mxfp8"
+    assert args.q_group_size == 32
+    assert args.quantization == QuantizationConfig(bits=8, mode="mxfp8", group_size=32)
+
+
+@pytest.mark.fast
+def test_metadata_quantize_does_not_override_explicit_non_affine_q_mode(
+    mflux_generate_parser,
+    mflux_generate_minimal_argv,
+    base_metadata_dict,
+    temp_dir,
+):
+    metadata_file = temp_dir / "quantization_mode_override.json"
+    with metadata_file.open("wt") as m:
+        base_metadata_dict["quantize"] = 8
+        json.dump(base_metadata_dict, m, indent=4)
+
+    with patch("sys.argv", mflux_generate_minimal_argv + ["--q-mode", "mxfp4", "--config-from-metadata", metadata_file.as_posix()]):
+        args = mflux_generate_parser.parse_args()
+
+    assert args.quantize == 4
+    assert args.q_mode == "mxfp4"
+    assert args.quantization == QuantizationConfig(bits=4, mode="mxfp4", group_size=None)
+
+
+@pytest.mark.fast
+def test_metadata_quantize_is_used_when_explicit_affine_q_mode_needs_bits(
+    mflux_generate_parser,
+    mflux_generate_minimal_argv,
+    base_metadata_dict,
+    temp_dir,
+):
+    metadata_file = temp_dir / "affine_quantization_mode.json"
+    with metadata_file.open("wt") as m:
+        base_metadata_dict["quantize"] = 8
+        json.dump(base_metadata_dict, m, indent=4)
+
+    with patch("sys.argv", mflux_generate_minimal_argv + ["--q-mode", "affine", "--config-from-metadata", metadata_file.as_posix()]):
+        args = mflux_generate_parser.parse_args()
+
+    assert args.quantize == 8
+    assert args.q_mode == "affine"
+    assert args.quantization == QuantizationConfig(bits=8, mode="affine", group_size=None)
+
+
+@pytest.mark.fast
+@pytest.mark.parametrize(
+    "extra_args",
+    [
+        ["--q-mode", "affine"],
+        ["--q-group-size", "32"],
+        ["--q-mode", "mxfp4", "--q-group-size", "0"],
+        ["--quantize", "8", "--q-mode", "mxfp4"],
+    ],
+)
+def test_q_mode_requires_compatible_quantize(mflux_generate_parser, mflux_generate_minimal_argv, extra_args):
+    with pytest.raises(SystemExit):
+        with patch("sys.argv", mflux_generate_minimal_argv + extra_args):
+            mflux_generate_parser.parse_args()
+
+
+@pytest.mark.fast
+def test_flux_cli_passes_normalized_quantization_config(monkeypatch):
+    from mflux.models.flux.cli import flux_generate
+
+    captured = {}
+
+    class FakeFlux:
+        def __init__(self, **kwargs):
+            captured["model_kwargs"] = kwargs
+
+        def generate_image(self, **kwargs):
+            captured["generate_kwargs"] = kwargs
+            return SimpleNamespace(save=lambda **save_kwargs: captured.setdefault("save_kwargs", save_kwargs))
+
+    monkeypatch.setattr(flux_generate, "Flux1", FakeFlux)
+    monkeypatch.setattr(flux_generate.ModelConfig, "from_name", lambda model_name, base_model: SimpleNamespace())
+    monkeypatch.setattr(flux_generate.CallbackManager, "register_callbacks", lambda **kwargs: None)
+    monkeypatch.setattr(flux_generate.DimensionResolver, "resolve", lambda **kwargs: (64, 64))
+
+    with patch(
+        "sys.argv",
+        [
+            "mflux-generate",
+            "--prompt",
+            "meaning of life",
+            "--seed",
+            "1",
+            "--steps",
+            "1",
+            "--q-mode",
+            "mxfp8",
+            "--q-group-size",
+            "32",
+        ],
+    ):
+        flux_generate.main()
+
+    assert captured["model_kwargs"]["quantization"] == QuantizationConfig(bits=8, mode="mxfp8", group_size=32)
+    assert "quantize" not in captured["model_kwargs"]
+    assert "q_mode" not in captured["model_kwargs"]
+    assert "q_group_size" not in captured["model_kwargs"]
+
+
+@pytest.mark.fast
+def test_flux_constructor_passes_quantization_config_to_initializer(monkeypatch):
+    from mflux.models.flux.variants.txt2img.flux import Flux1
+
+    captured = {}
+    quantization = QuantizationConfig(bits=4, mode="mxfp4", group_size=32)
+
+    def fake_init(**kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr("mflux.models.flux.variants.txt2img.flux.FluxInitializer.init", fake_init)
+
+    Flux1(quantization=quantization)
+
+    assert captured["quantization"] is quantization
+    assert "q_mode" not in captured
+    assert "q_group_size" not in captured
 
 
 @pytest.mark.fast
@@ -709,6 +891,13 @@ def test_save_args(mflux_save_parser):
         # required --path not provided, exits to error
         args = mflux_save_parser.parse_args()
         assert args.path == "/some/model/folder"
+    with patch("sys.argv", ["mflux-save", "--model", "dev", "--path", "/some/model/folder", "--q-mode", "mxfp8"]):
+        args = mflux_save_parser.parse_args()
+        assert args.quantize == 8
+        assert args.q_mode == "mxfp8"
+        assert args.quantization.bits == 8
+        assert args.quantization.mode == "mxfp8"
+        assert args.quantization.group_size is None
 
 
 @pytest.mark.fast

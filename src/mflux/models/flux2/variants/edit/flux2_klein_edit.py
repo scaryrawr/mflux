@@ -5,6 +5,7 @@ from mlx import nn
 
 from mflux.models.common.config.config import Config
 from mflux.models.common.config.model_config import ModelConfig
+from mflux.models.common.resolution.quantization_config import QuantizationConfig
 from mflux.models.flux2.flux2_initializer import Flux2Initializer
 from mflux.models.flux2.model.flux2_text_encoder.qwen3_text_encoder import Qwen3TextEncoder
 from mflux.models.flux2.model.flux2_transformer.flux2_kv_cache import CacheMode, Flux2KVCache
@@ -29,15 +30,24 @@ class Flux2KleinEdit(nn.Module):
         lora_paths: list[str] | None = None,
         lora_scales: list[float] | None = None,
         model_config: ModelConfig | None = None,
+        *,
+        q_mode: str | None = None,
+        q_group_size: int | None = None,
+        quantization: QuantizationConfig | None = None,
     ):
         super().__init__()
+        quantization = quantization or QuantizationConfig.from_request(
+            quantize=quantize,
+            q_mode=q_mode,
+            q_group_size=q_group_size,
+        )
         Flux2Initializer.init(
             model=self,
-            quantize=quantize,
             model_path=model_path,
             lora_paths=lora_paths,
             lora_scales=lora_scales,
             model_config=model_config or ModelConfig.flux2_klein_4b(),
+            quantization=quantization,
         )
 
     def generate_image(
@@ -189,6 +199,8 @@ class Flux2KleinEdit(nn.Module):
             prompt=prompt,
             negative_prompt=None,
             quantization=self.bits,
+            q_mode=self.q_mode,
+            q_group_size=self.q_group_size,
             image_paths=image_paths,
             image_path=config.image_path,
             generation_time=config.time_steps.format_dict["elapsed"],

@@ -5,6 +5,7 @@ from pathlib import Path
 import mlx.core as mx
 from PIL import Image
 
+from mflux.models.common.resolution.quantization_config import QuantizationConfig
 from mflux.models.common.vae.vae_util import VAEUtil
 from mflux.models.fibo.latent_creator.fibo_latent_creator import FiboLatentCreator
 from mflux.models.fibo.model.fibo_vae.wan_2_2_vae import Wan2_2_VAE
@@ -24,7 +25,7 @@ class FiboEditUtil:
     @staticmethod
     def get_json_prompt_for_edit(
         args,
-        quantize: int | None,
+        quantization: QuantizationConfig,
         default_json_prompt_if_missing: str | None = None,
     ) -> str:
         prompt = PromptUtil.read_prompt(args)
@@ -51,7 +52,7 @@ class FiboEditUtil:
                 raise ValueError("Mask and image must have the same size.")
             image = FiboEditUtil._composite_mask_on_image(mask=mask_image, image=image)
 
-        vlm = FiboVLM(quantize=quantize)
+        vlm = FiboVLM(quantization=quantization)
         try:
             return vlm.edit(
                 image=image,

@@ -6,6 +6,7 @@ from mlx import nn
 from mflux.models.common.config.config import Config
 from mflux.models.common.config.model_config import ModelConfig
 from mflux.models.common.latent_creator.latent_creator import Img2Img, LatentCreator
+from mflux.models.common.resolution.quantization_config import QuantizationConfig
 from mflux.models.common.vae.vae_util import VAEUtil
 from mflux.models.flux.flux_initializer import FluxInitializer
 from mflux.models.flux.latent_creator.flux_latent_creator import FluxLatentCreator
@@ -34,15 +35,24 @@ class Flux1Concept(nn.Module):
         lora_paths: list[str] | None = None,
         lora_scales: list[float] | None = None,
         model_config: ModelConfig = ModelConfig.schnell(),
+        *,
+        q_mode: str | None = None,
+        q_group_size: int | None = None,
+        quantization: QuantizationConfig | None = None,
     ):
         super().__init__()
+        quantization = quantization or QuantizationConfig.from_request(
+            quantize=quantize,
+            q_mode=q_mode,
+            q_group_size=q_group_size,
+        )
         FluxInitializer.init_concept(
             model=self,
-            quantize=quantize,
             model_path=model_path,
             lora_paths=lora_paths,
             lora_scales=lora_scales,
             model_config=model_config,
+            quantization=quantization,
         )
 
     def generate_image(
@@ -165,6 +175,8 @@ class Flux1Concept(nn.Module):
             seed=seed,
             prompt=prompt,
             quantization=self.bits,
+            q_mode=self.q_mode,
+            q_group_size=self.q_group_size,
             lora_paths=self.lora_paths,
             lora_scales=self.lora_scales,
             image_path=config.image_path,

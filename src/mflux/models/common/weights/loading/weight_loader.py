@@ -13,6 +13,7 @@ from safetensors.torch import load_file as torch_load_file
 
 from mflux.cli.defaults.defaults import MFLUX_CACHE_DIR
 from mflux.models.common.resolution.path_resolution import PathResolution
+from mflux.models.common.resolution.quantization_config import QuantizationConfig
 from mflux.models.common.weights.loading.loaded_weights import LoadedWeights, MetaData
 from mflux.models.common.weights.loading.safetensors_reader import SafetensorsReader
 from mflux.models.common.weights.loading.weight_definition import ComponentDefinition
@@ -32,10 +33,10 @@ class WeightLoader:
         file_pattern: str = "*.safetensors",
     ) -> LoadedWeights:
         root_path = Path(snapshot_download(repo_id=repo_id, allow_patterns=[file_pattern, "config.json"]))
-        weights, q_level, version = WeightLoader._load_component(root_path, component)
+        weights, meta_data = WeightLoader._load_component(root_path, component)
         return LoadedWeights(
             components={component.name: weights},
-            meta_data=MetaData(quantization_level=q_level, mflux_version=version),
+            meta_data=meta_data,
         )
 
     @staticmethod
@@ -50,25 +51,20 @@ class WeightLoader:
 
         # 2. Load each component (with caching for shared sources)
         components = {}
-        quantization_level = None
-        mflux_version = None
+        meta_data = MetaData()
         raw_weights_cache: dict[tuple, dict] = {}  # Cache by (path, loading_mode, weight_files)
 
         for component in weight_definition.get_components():
-            weights, q_level, version = WeightLoader._load_component(root_path, component, raw_weights_cache)
+            weights, component_meta_data = WeightLoader._load_component(root_path, component, raw_weights_cache)
             components[component.name] = weights
 
             # Track metadata from first component that has it
-            if quantization_level is None and q_level is not None:
-                quantization_level = q_level
-                mflux_version = version
+            if not meta_data.has_mflux_metadata and component_meta_data.has_mflux_metadata:
+                meta_data = component_meta_data
 
         return LoadedWeights(
             components=components,
-            meta_data=MetaData(
-                quantization_level=quantization_level,
-                mflux_version=mflux_version,
-            ),
+            meta_data=meta_data,
         )
 
     @staticmethod
@@ -76,7 +72,7 @@ class WeightLoader:
         root_path: Path | None,
         component: ComponentDefinition,
         raw_weights_cache: dict[tuple, dict] | None = None,
-    ) -> tuple[dict, int | None, str | None]:
+    ) -> tuple[dict, MetaData]:
         # Handle direct URL downloads (e.g., Apple CDN for DepthPro)
         if component.download_url is not None:
             file_path = WeightLoader._download_from_url(component.download_url, component.name)
@@ -87,9 +83,9 @@ class WeightLoader:
             component_path = root_path / component.hf_subdir
 
             # Try mflux saved format first (including FP8 components reloaded after mflux-save).
-            weights, q_level, version = WeightLoader._try_load_mflux_format(component_path)
+            weights, meta_data = WeightLoader._try_load_mflux_format(component_path)
             if weights is not None:
-                return weights, q_level, version
+                return weights, meta_data
 
             # Check cache for shared loading (e.g., FIBO VLM decoder + visual from same source)
             cache_key = (str(component_path), component.loading_mode, tuple(component.weight_files or []))
@@ -131,7 +127,7 @@ class WeightLoader:
         if component.mapping_getter is None:
             if component.bulk_transform is not None:
                 raw_weights = {k: component.bulk_transform(v) for k, v in raw_weights.items()}
-            return tree_unflatten(list(raw_weights.items())), None, None
+            return tree_unflatten(list(raw_weights.items())), MetaData()
 
         # Standard mode: apply declarative weight mapping
         mapped_weights = WeightMapper.apply_mapping(
@@ -140,34 +136,25 @@ class WeightLoader:
             num_blocks=component.num_blocks,
             num_layers=component.num_layers,
         )
-        return mapped_weights, None, None
+        return mapped_weights, MetaData()
 
     @staticmethod
-    def _try_load_mflux_format(path: Path) -> tuple[dict | None, int | None, str | None]:
+    def _try_load_mflux_format(path: Path) -> tuple[dict | None, MetaData]:
         if not path.exists():
-            return None, None, None
+            return None, MetaData()
 
         shard_files = sorted(f for f in path.glob("*.safetensors") if not f.name.startswith("._"))
         if not shard_files:
-            return None, None, None
+            return None, MetaData()
 
-        # Check metadata on first file
         data = mx.load(str(shard_files[0]), return_metadata=True)
-        if len(data) <= 1:
-            return None, None, None
+        metadata = WeightLoader._mflux_metadata(data[1] if len(data) > 1 else None)
+        if metadata is None:
+            metadata = WeightLoader._mflux_metadata(WeightLoader._index_metadata(path))
+        if metadata is None:
+            return None, MetaData()
 
-        quantization_level_str = data[1].get("quantization_level")
-        mflux_version = data[1].get("mflux_version")
-
-        # If no mflux metadata, this isn't our format
-        if quantization_level_str is None and mflux_version is None:
-            return None, None, None
-
-        # Convert quantization level from string to int
-        if quantization_level_str in (None, "None", "null", ""):
-            quantization_level = None
-        else:
-            quantization_level = int(quantization_level_str)
+        meta_data = WeightLoader._parse_mflux_metadata(metadata)
 
         # Load all shards
         all_weights: dict[str, mx.array] = {}
@@ -176,7 +163,51 @@ class WeightLoader:
             all_weights.update(dict(shard_data[0].items()))
 
         unflattened = tree_unflatten(list(all_weights.items()))
-        return unflattened, quantization_level, mflux_version
+        return unflattened, meta_data
+
+    @staticmethod
+    def _parse_mflux_metadata(metadata: dict) -> MetaData:
+        quantization = QuantizationConfig.from_stored(
+            quantization_level=WeightLoader._metadata_int(metadata.get("quantization_level")),
+            quantization_mode=WeightLoader._metadata_str(metadata.get("quantization_mode")),
+            quantization_group_size=WeightLoader._metadata_int(metadata.get("quantization_group_size")),
+        )
+        return MetaData.from_quantization(
+            quantization=quantization,
+            mflux_version=WeightLoader._metadata_str(metadata.get("mflux_version")),
+        )
+
+    @staticmethod
+    def _mflux_metadata(metadata: dict | None) -> dict | None:
+        if metadata is None:
+            return None
+        if "quantization_level" in metadata or metadata.get("mflux_version") is not None:
+            return metadata
+        return None
+
+    @staticmethod
+    def _index_metadata(path: Path) -> dict | None:
+        index_path = path / "model.safetensors.index.json"
+        if not index_path.exists():
+            return None
+        with open(index_path) as f:
+            index = json.load(f)
+        metadata = index.get("metadata")
+        if isinstance(metadata, dict):
+            return metadata
+        return None
+
+    @staticmethod
+    def _metadata_int(value: int | str | None) -> int | None:
+        if value in (None, "None", "null", ""):
+            return None
+        return int(value)
+
+    @staticmethod
+    def _metadata_str(value: str | None) -> str | None:
+        if value in (None, "None", "null", ""):
+            return None
+        return value
 
     @staticmethod
     def _download_from_url(url: str, component_name: str) -> Path:

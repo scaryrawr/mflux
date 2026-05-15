@@ -1,6 +1,7 @@
 from mflux.callbacks.callback_registry import CallbackRegistry
 from mflux.models.common.config import ModelConfig
 from mflux.models.common.lora.mapping.lora_loader import LoRALoader
+from mflux.models.common.resolution.quantization_config import QuantizationConfig
 from mflux.models.common.tokenizer import TokenizerLoader
 from mflux.models.common.weights.loading.loaded_weights import LoadedWeights
 from mflux.models.common.weights.loading.weight_applier import WeightApplier
@@ -26,7 +27,7 @@ class FluxInitializer:
     def init(
         model,
         model_config: ModelConfig,
-        quantize: int | None,
+        quantization: QuantizationConfig,
         model_path: str | None = None,
         lora_paths: list[str] | None = None,
         lora_scales: list[float] | None = None,
@@ -37,14 +38,14 @@ class FluxInitializer:
         weights = FluxInitializer._load_weights(path)
         FluxInitializer._init_tokenizers(model, path, model_config)
         FluxInitializer._init_models(model, model_config, weights, custom_transformer)
-        FluxInitializer._apply_weights(model, weights, quantize)
+        FluxInitializer._apply_weights(model, weights, quantization)
         FluxInitializer._apply_lora(model, lora_paths, lora_scales)
 
     @staticmethod
     def init_depth(
         model,
         model_config: ModelConfig,
-        quantize: int | None,
+        quantization: QuantizationConfig,
         model_path: str | None = None,
         lora_paths: list[str] | None = None,
         lora_scales: list[float] | None = None,
@@ -52,7 +53,7 @@ class FluxInitializer:
         FluxInitializer.init(
             model=model,
             model_config=model_config,
-            quantize=quantize,
+            quantization=quantization,
             model_path=model_path,
             lora_paths=lora_paths,
             lora_scales=lora_scales,
@@ -63,14 +64,14 @@ class FluxInitializer:
     def init_redux(
         model,
         model_config: ModelConfig,
-        quantize: int | None,
+        quantization: QuantizationConfig,
         model_path: str | None = None,
         lora_paths: list[str] | None = None,
         lora_scales: list[float] | None = None,
     ) -> None:
         FluxInitializer.init(
             model=model,
-            quantize=quantize,
+            quantization=quantization,
             model_path=model_path,
             lora_paths=lora_paths,
             lora_scales=lora_scales,
@@ -85,7 +86,7 @@ class FluxInitializer:
         model.image_encoder = SiglipVisionTransformer()
         WeightApplier.apply_and_quantize(
             weights=redux_weights,
-            quantize_arg=quantize,
+            quantization=quantization,
             weight_definition=FluxReduxWeightDefinition,
             models={
                 "siglip": model.image_encoder,
@@ -97,7 +98,7 @@ class FluxInitializer:
     def init_controlnet(
         model,
         model_config: ModelConfig,
-        quantize: int | None,
+        quantization: QuantizationConfig,
         model_path: str | None = None,
         lora_paths: list[str] | None = None,
         lora_scales: list[float] | None = None,
@@ -105,7 +106,7 @@ class FluxInitializer:
         FluxInitializer.init(
             model=model,
             model_config=model_config,
-            quantize=quantize,
+            quantization=quantization,
             model_path=model_path,
             lora_paths=lora_paths,
             lora_scales=lora_scales,
@@ -125,7 +126,7 @@ class FluxInitializer:
             weights=controlnet_weights,
             model=model.transformer_controlnet,
             component=controlnet_component,
-            quantize_arg=quantize,
+            quantization=quantization,
             quantization_predicate=FluxWeightDefinition.quantization_predicate,
         )
 
@@ -133,7 +134,7 @@ class FluxInitializer:
     def init_concept(
         model,
         model_config: ModelConfig,
-        quantize: int | None,
+        quantization: QuantizationConfig,
         model_path: str | None = None,
         lora_paths: list[str] | None = None,
         lora_scales: list[float] | None = None,
@@ -150,7 +151,7 @@ class FluxInitializer:
             num_single_transformer_blocks=weights.num_single_transformer_blocks(),
         )
         FluxInitializer._init_models(model, model_config, weights, custom_transformer)
-        FluxInitializer._apply_weights(model, weights, quantize)
+        FluxInitializer._apply_weights(model, weights, quantization)
         FluxInitializer._apply_lora(model, lora_paths, lora_scales)
 
     @staticmethod
@@ -198,10 +199,14 @@ class FluxInitializer:
             )
 
     @staticmethod
-    def _apply_weights(model, weights: LoadedWeights, quantize: int | None) -> None:
-        model.bits = WeightApplier.apply_and_quantize(
+    def _apply_weights(
+        model,
+        weights: LoadedWeights,
+        quantization: QuantizationConfig,
+    ) -> None:
+        quantization = WeightApplier.apply_and_quantize(
             weights=weights,
-            quantize_arg=quantize,
+            quantization=quantization,
             weight_definition=FluxWeightDefinition,
             models={
                 "vae": model.vae,
@@ -210,6 +215,7 @@ class FluxInitializer:
                 "clip_encoder": model.clip_text_encoder,
             },
         )
+        WeightApplier.set_quantization_state(model, quantization)
 
     @staticmethod
     def _apply_lora(model, lora_paths: list[str] | None, lora_scales: list[float] | None) -> None:

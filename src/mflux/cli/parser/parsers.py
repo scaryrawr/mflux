@@ -8,6 +8,7 @@ from pathlib import Path
 
 from mflux.cli.defaults import defaults as ui_defaults
 from mflux.models.common.resolution.lora_resolution import LoraResolution
+from mflux.models.common.resolution.quantization_config import QuantizationConfig
 from mflux.models.flux.variants.in_context.utils.in_context_loras import LORA_NAME_MAP
 from mflux.utils import box_values, scale_factor
 
@@ -88,7 +89,7 @@ class CommandLineParser(argparse.ArgumentParser):
         if path_type == "save":
             self.add_argument("--path", type=str, required=True, help="Local path for saving a model to disk.")
         self.add_argument("--base-model", type=str, required=False, choices=ui_defaults.MODEL_CHOICES, help="When using a third-party huggingface model, explicitly specify whether the base model is dev or schnell")
-        self.add_argument("--quantize",  "-q", type=int, choices=ui_defaults.QUANTIZE_CHOICES, default=None, help=f"Quantize the model ({' or '.join(map(str, ui_defaults.QUANTIZE_CHOICES))}, Default is None)")
+        self._add_quantization_arguments()
 
     def add_lora_arguments(self) -> None:
         self.supports_lora = True
@@ -165,7 +166,7 @@ class CommandLineParser(argparse.ArgumentParser):
 
     def add_save_depth_arguments(self) -> None:
         self.add_argument("--image-path", type=Path, required=True, help="Local path to the source image")
-        self.add_argument("--quantize",  "-q", type=int, choices=ui_defaults.QUANTIZE_CHOICES, default=None, required=False, help=f"Quantize the model ({' or '.join(map(str, ui_defaults.QUANTIZE_CHOICES))}, Default is None)")
+        self._add_quantization_arguments(required=False)
 
     def add_redux_arguments(self) -> None:
         self.add_argument("--redux-image-paths", type=Path, nargs="*", required=True, help="Local path to the source image")
@@ -204,6 +205,11 @@ class CommandLineParser(argparse.ArgumentParser):
     def add_metadata_config(self) -> None:
         self.supports_metadata_config = True
         self.add_argument("--config-from-metadata", "-C", type=Path, required=False, default=argparse.SUPPRESS, help="Re-use the parameters from prior metadata. Params from metadata are secondary to other args you provide.")
+
+    def _add_quantization_arguments(self, required=False) -> None:
+        self.add_argument("--quantize",  "-q", type=int, choices=ui_defaults.QUANTIZE_CHOICES, default=None, required=required, help=f"Quantize the model ({' or '.join(map(str, ui_defaults.QUANTIZE_CHOICES))}, Default is None)")
+        self.add_argument("--q-mode", type=str, choices=ui_defaults.Q_MODE_CHOICES, default=None, required=False, help=f"Quantization mode ({' or '.join(ui_defaults.Q_MODE_CHOICES)}, Default is affine)")
+        self.add_argument("--q-group-size", type=int, default=None, required=False, help="Quantization group size passed to MLX.")
 
     def add_training_arguments(self) -> None:
         train_group = self.add_mutually_exclusive_group(required=True)
@@ -319,8 +325,14 @@ class CommandLineParser(argparse.ArgumentParser):
             guidance_from_metadata = prior_gen_metadata.get("guidance")
             if namespace.guidance == guidance_default and guidance_from_metadata:
                 namespace.guidance = guidance_from_metadata
-            if namespace.quantize is None:
+            q_mode_was_provided = self._option_was_provided("--q-mode")
+            explicit_non_affine_q_mode = q_mode_was_provided and namespace.q_mode != "affine"
+            if namespace.quantize is None and not explicit_non_affine_q_mode:
                 namespace.quantize = prior_gen_metadata.get("quantize", None)
+            if getattr(namespace, "q_mode", None) is None:
+                namespace.q_mode = prior_gen_metadata.get("q_mode", None)
+            if getattr(namespace, "q_group_size", None) is None:
+                namespace.q_group_size = prior_gen_metadata.get("q_group_size", None)
             seed_from_metadata = prior_gen_metadata.get("seed", None)
             if namespace.seed is None and seed_from_metadata is not None:
                 namespace.seed = [seed_from_metadata]
@@ -390,6 +402,18 @@ class CommandLineParser(argparse.ArgumentParser):
         if self.supports_image_generation and namespace.seed is None:
             # final default: did not obtain seed from metadata, --seed, or --auto-seeds
             namespace.seed = [int(time.time())]
+
+        if hasattr(namespace, "quantize"):
+            try:
+                quantization_config = QuantizationConfig.from_request(
+                    quantize=namespace.quantize,
+                    q_mode=getattr(namespace, "q_mode", None),
+                    q_group_size=getattr(namespace, "q_group_size", None),
+                )
+            except ValueError as e:
+                self.error(str(e))
+            namespace.quantization = quantization_config
+            namespace.quantize = quantization_config.bits
 
         if self.supports_image_generation and len(namespace.seed) > 1:
             # auto append seed-$value to output names for multi image generations

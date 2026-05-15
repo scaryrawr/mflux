@@ -10,6 +10,7 @@ import PIL.ImageDraw
 from PIL._typing import StrOrBytesPath
 
 from mflux.models.common.config.config import Config
+from mflux.models.common.resolution.quantization_config import QuantizationConfig
 from mflux.models.flux.variants.concept_attention.attention_data import ConceptHeatmap
 from mflux.utils.box_values import AbsoluteBoxValues, BoxValues
 from mflux.utils.generated_image import GeneratedImage
@@ -40,8 +41,10 @@ class ImageUtil:
         config: Config,
         seed: int,
         prompt: str,
-        quantization: int,
+        quantization: QuantizationConfig | int | None,
         generation_time: float,
+        q_mode: str | None = None,
+        q_group_size: int | None = None,
         lora_paths: list[str] | None = None,
         lora_scales: list[float] | None = None,
         controlnet_image_path: str | Path | None = None,
@@ -67,7 +70,7 @@ class ImageUtil:
             prompt=prompt,
             guidance=config.guidance,
             precision=config.precision,
-            quantization=quantization,
+            quantization=ImageUtil._quantization_config(quantization, q_mode, q_group_size),
             generation_time=generation_time,
             lora_paths=lora_paths,
             lora_scales=lora_scales,
@@ -98,6 +101,26 @@ class ImageUtil:
             composite_img.paste(gen_img.image, (current_x, 0))
             current_x += gen_img.image.width
         return composite_img
+
+    @staticmethod
+    def _quantization_config(
+        quantization: QuantizationConfig | int | None,
+        q_mode: str | None,
+        q_group_size: int | None,
+    ) -> QuantizationConfig:
+        if isinstance(quantization, QuantizationConfig):
+            mode = q_mode or quantization.mode
+            group_size = q_group_size if q_group_size is not None else quantization.group_size
+            return QuantizationConfig.from_request(
+                quantize=quantization.bits,
+                q_mode=mode if quantization.is_quantized or q_mode is not None else q_mode,
+                q_group_size=group_size,
+            )
+        return QuantizationConfig.from_request(
+            quantize=quantization,
+            q_mode=q_mode,
+            q_group_size=q_group_size,
+        )
 
     @staticmethod
     def _denormalize(images: mx.array) -> mx.array:

@@ -7,6 +7,7 @@ import mlx.core as mx
 import PIL.Image
 
 from mflux.models.common.config import ModelConfig
+from mflux.models.common.resolution.quantization_config import QuantizationConfig
 from mflux.models.flux.variants.concept_attention.attention_data import ConceptHeatmap
 from mflux.utils.version_util import VersionUtil
 
@@ -23,8 +24,10 @@ class GeneratedImage:
         steps: int,
         guidance: float | None,
         precision: mx.Dtype,
-        quantization: int,
+        quantization: QuantizationConfig | int | None,
         generation_time: float,
+        q_mode: str | None = None,
+        q_group_size: int | None = None,
         lora_paths: list[str] | None = None,
         lora_scales: list[float] | None = None,
         height: int | None = None,
@@ -49,7 +52,10 @@ class GeneratedImage:
         self.steps = steps
         self.guidance = guidance
         self.precision = precision
-        self.quantization = quantization
+        self.quantization_config = self._normalize_quantization(quantization, q_mode, q_group_size)
+        self.quantization = self.quantization_config.bits
+        self.q_mode = self.quantization_config.metadata_mode
+        self.q_group_size = self.quantization_config.metadata_group_size
         self.generation_time = generation_time
         self.lora_paths = lora_paths
         self.lora_scales = lora_scales
@@ -82,7 +88,7 @@ class GeneratedImage:
             steps=self.steps,
             guidance=self.guidance,
             precision=self.precision,
-            quantization=self.quantization,
+            quantization=self.quantization_config,
             generation_time=self.generation_time,
             lora_paths=self.lora_paths,
             lora_scales=self.lora_scales,
@@ -218,7 +224,9 @@ class GeneratedImage:
             "height": self.height,
             "width": self.width,
             "precision": str(self.precision),
-            "quantize": self.quantization,
+            "quantize": self.quantization_config.bits,
+            "q_mode": self.quantization_config.metadata_mode,
+            "q_group_size": self.quantization_config.metadata_group_size,
             "generation_time_seconds": round(self.generation_time, 2),
             "created_at": datetime.now().isoformat(),
             "lora_paths": [str(p) for p in self.lora_paths] if self.lora_paths else None,
@@ -261,9 +269,31 @@ class GeneratedImage:
                 "lora_paths",
                 "lora_scales",
                 "quantize",
+                "q_mode",
+                "q_group_size",
             ]
             for field in fields_to_carry:
                 if old_val := old_exif.get(field):
                     metadata[f"original_{field}"] = old_val
 
         return metadata
+
+    @staticmethod
+    def _normalize_quantization(
+        quantization: QuantizationConfig | int | None,
+        q_mode: str | None,
+        q_group_size: int | None,
+    ) -> QuantizationConfig:
+        if isinstance(quantization, QuantizationConfig):
+            mode = q_mode or quantization.mode
+            group_size = q_group_size if q_group_size is not None else quantization.group_size
+            return QuantizationConfig.from_request(
+                quantize=quantization.bits,
+                q_mode=mode if quantization.is_quantized or q_mode is not None else q_mode,
+                q_group_size=group_size,
+            )
+        return QuantizationConfig.from_request(
+            quantize=quantization,
+            q_mode=q_mode,
+            q_group_size=q_group_size,
+        )

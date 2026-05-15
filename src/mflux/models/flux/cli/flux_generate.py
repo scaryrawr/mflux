@@ -30,7 +30,7 @@ def main():
     # 1. Load the model
     flux = Flux1(
         model_config=ModelConfig.from_name(model_name=args.model, base_model=args.base_model),
-        quantize=args.quantize,
+        quantization=args.quantization,
         model_path=args.model_path,
         lora_paths=args.lora_paths,
         lora_scales=args.lora_scales,

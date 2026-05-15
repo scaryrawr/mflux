@@ -4,6 +4,7 @@ import mlx.core as mx
 from PIL import Image
 
 from mflux.models.common.config import ModelConfig
+from mflux.models.common.resolution.quantization_config import QuantizationConfig
 from mflux.utils.generated_image import GeneratedImage
 
 
@@ -60,6 +61,29 @@ def test_exported_metadata_uses_metadata_sidecar_suffix(tmp_path):
     assert metadata_path.exists()
     assert not output_path.with_suffix(".json").exists()
     assert json.loads(metadata_path.read_text())["seed"] == 42
+
+
+def test_generated_image_metadata_accepts_quantization_config():
+    generated_image = GeneratedImage(
+        image=Image.new("RGB", (16, 16), "white"),
+        model_config=ModelConfig.qwen_image(),
+        seed=42,
+        prompt="test prompt",
+        steps=20,
+        guidance=3.5,
+        precision=mx.bfloat16,
+        quantization=QuantizationConfig(bits=4, mode="mxfp4", group_size=32),
+        generation_time=1.23,
+        height=16,
+        width=16,
+    )
+
+    metadata = generated_image._get_metadata()
+
+    assert generated_image.quantization_config == QuantizationConfig(bits=4, mode="mxfp4", group_size=32)
+    assert metadata["quantize"] == 4
+    assert metadata["q_mode"] == "mxfp4"
+    assert metadata["q_group_size"] == 32
 
 
 def test_fibo_edit_save_keeps_prompt_json_and_exports_metadata_separately(tmp_path):

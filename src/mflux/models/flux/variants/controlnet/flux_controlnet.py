@@ -3,6 +3,7 @@ from mlx import nn
 
 from mflux.models.common.config.config import Config
 from mflux.models.common.config.model_config import ModelConfig
+from mflux.models.common.resolution.quantization_config import QuantizationConfig
 from mflux.models.common.vae.vae_util import VAEUtil
 from mflux.models.common.weights.saving.model_saver import ModelSaver
 from mflux.models.flux.flux_initializer import FluxInitializer
@@ -36,15 +37,24 @@ class Flux1Controlnet(nn.Module):
         lora_scales: list[float] | None = None,
         controlnet_path: str | None = None,
         model_config: ModelConfig = ModelConfig.dev_controlnet_canny(),
+        *,
+        q_mode: str | None = None,
+        q_group_size: int | None = None,
+        quantization: QuantizationConfig | None = None,
     ):
         super().__init__()
+        quantization = quantization or QuantizationConfig.from_request(
+            quantize=quantize,
+            q_mode=q_mode,
+            q_group_size=q_group_size,
+        )
         FluxInitializer.init_controlnet(
             model=self,
-            quantize=quantize,
             model_path=model_path,
             lora_paths=lora_paths,
             lora_scales=lora_scales,
             model_config=model_config,
+            quantization=quantization,
         )
 
     def generate_image(
@@ -157,6 +167,8 @@ class Flux1Controlnet(nn.Module):
             seed=seed,
             prompt=prompt,
             quantization=self.bits,
+            q_mode=self.q_mode,
+            q_group_size=self.q_group_size,
             lora_paths=self.lora_paths,
             lora_scales=self.lora_scales,
             controlnet_image_path=controlnet_image_path,
@@ -167,7 +179,7 @@ class Flux1Controlnet(nn.Module):
     def save_model(self, base_path: str) -> None:
         ModelSaver.save_model(
             model=self,
-            bits=self.bits,
+            quantization=self.quantization,
             base_path=base_path,
             weight_definition=FluxControlnetWeightDefinition,
         )

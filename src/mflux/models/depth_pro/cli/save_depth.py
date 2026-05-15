@@ -11,7 +11,7 @@ def main():
     args = parser.parse_args()
 
     # 1. Create the depth map
-    depth_pro = DepthPro(quantize=args.quantize)
+    depth_pro = DepthPro(quantization=args.quantization)
     depth_result = depth_pro.create_depth_map(image_path=args.image_path)
 
     # 2. Save the depth map with the same name + _depth suffix

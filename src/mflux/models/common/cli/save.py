@@ -53,7 +53,7 @@ def main():
         )
         model_path = None if Ideogram4WeightDefinition.is_builtin_name(args.model) else args.model_path
         model = model_class(
-            quantize=args.quantize,
+            quantization=args.quantization,
             lora_paths=args.lora_paths,
             lora_scales=args.lora_scales,
             model_path=model_path,
@@ -62,7 +62,7 @@ def main():
     else:
         model_config = ModelConfig.from_name(args.model, base_model=args.base_model)
         model = model_class(
-            quantize=args.quantize,
+            quantization=args.quantization,
             lora_paths=args.lora_paths,
             lora_scales=args.lora_scales,
             model_path=args.model_path,

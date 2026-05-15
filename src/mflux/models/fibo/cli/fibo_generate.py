@@ -36,11 +36,14 @@ def main():
         else:
             args.guidance = ui_defaults.GUIDANCE_SCALE
 
-    json_prompt = FiboUtil.get_json_prompt(args, quantize=args.quantize)
+    json_prompt = FiboUtil.get_json_prompt(
+        args,
+        quantization=args.quantization,
+    )
 
     # 1. Load the FIBO model
     fibo = FIBO(
-        quantize=args.quantize,
+        quantization=args.quantization,
         model_path=args.model_path,
         model_config=model_config,
     )

@@ -33,7 +33,7 @@ def main():
     # 1. Load the model
     flux = Flux1InContextFill(
         model_config=ModelConfig.dev_fill_catvton(),
-        quantize=args.quantize,
+        quantization=args.quantization,
         model_path=args.model_path,
         lora_paths=args.lora_paths,
         lora_scales=args.lora_scales,

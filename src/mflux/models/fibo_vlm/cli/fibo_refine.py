@@ -13,7 +13,7 @@ def main():
     parser.add_argument("--prompt-file", type=Path, required=True, help="Path to JSON prompt file to refine")
     parser.add_argument("--instructions", type=str, required=True, help="Text instructions for how to refine the prompt (e.g., 'make the dragon blue')")
     parser.add_argument("--output", type=Path, default=Path("refined.json"), help="Output path for refined JSON prompt (default: refined.json)")
-    parser.add_argument("-q", "--quantize", type=int, choices=[3, 4, 5, 6, 8], default=None, help="Quantize the VLM model (3, 4, 5, 6, or 8 bits)")
+    parser._add_quantization_arguments()
     parser.add_argument("--top-p", type=float, default=0.9, help="Top-p sampling for VLM (default: 0.9)")
     parser.add_argument("--temperature", type=float, default=0.2, help="Temperature for VLM (default: 0.2)")
     parser.add_argument("--max-tokens", type=int, default=4096, help="Max tokens for VLM generation (default: 4096)")
@@ -23,7 +23,7 @@ def main():
 
     try:
         # 1. Refine the JSON prompt
-        vlm = FiboVLM(quantize=args.quantize)
+        vlm = FiboVLM(quantization=args.quantization)
         refined_json = vlm.refine(
             seed=args.seed,
             structured_prompt=FiboVLMUtil.get_structured_prompt(args.prompt_file),

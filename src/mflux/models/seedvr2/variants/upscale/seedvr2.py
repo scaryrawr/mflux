@@ -5,6 +5,7 @@ from mlx import nn
 
 from mflux.models.common.config.config import Config
 from mflux.models.common.config.model_config import ModelConfig
+from mflux.models.common.resolution.quantization_config import QuantizationConfig
 from mflux.models.common.vae.vae_util import VAEUtil
 from mflux.models.seedvr2.latent_creator.seedvr2_latent_creator import SeedVR2LatentCreator
 from mflux.models.seedvr2.model.seedvr2_text_encoder.text_embeddings import SeedVR2TextEmbeddings
@@ -27,13 +28,22 @@ class SeedVR2(nn.Module):
         quantize: int | None = None,
         model_path: str | None = None,
         model_config: ModelConfig = ModelConfig.seedvr2_3b(),
+        *,
+        q_mode: str | None = None,
+        q_group_size: int | None = None,
+        quantization: QuantizationConfig | None = None,
     ):
         super().__init__()
+        quantization = quantization or QuantizationConfig.from_request(
+            quantize=quantize,
+            q_mode=q_mode,
+            q_group_size=q_group_size,
+        )
         SeedVR2Initializer.init(
             model=self,
-            quantize=quantize,
             model_path=model_path,
             model_config=model_config,
+            quantization=quantization,
         )
 
     def generate_image(
@@ -108,6 +118,8 @@ class SeedVR2(nn.Module):
             prompt="",
             config=config,
             quantization=self.bits,
+            q_mode=self.q_mode,
+            q_group_size=self.q_group_size,
             decoded_latents=decoded,
             generation_time=config.time_steps.format_dict["elapsed"],
             init_metadata=init_metadata,

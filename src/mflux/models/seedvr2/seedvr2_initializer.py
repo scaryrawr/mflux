@@ -1,5 +1,6 @@
 from mflux.callbacks.callback_registry import CallbackRegistry
 from mflux.models.common.config import ModelConfig
+from mflux.models.common.resolution.quantization_config import QuantizationConfig
 from mflux.models.common.vae.tiling_config import TilingConfig
 from mflux.models.common.weights.loading.loaded_weights import LoadedWeights
 from mflux.models.common.weights.loading.weight_applier import WeightApplier
@@ -14,7 +15,7 @@ class SeedVR2Initializer:
     def init(
         model,
         model_config: ModelConfig,
-        quantize: int | None = None,
+        quantization: QuantizationConfig,
         model_path: str | None = None,
     ) -> None:
         path = model_path if model_path else model_config.model_name
@@ -22,7 +23,7 @@ class SeedVR2Initializer:
         SeedVR2Initializer._init_config(model, model_config)
         weights = SeedVR2Initializer._load_weights(path, weight_definition)
         SeedVR2Initializer._init_models(model, model_config)
-        SeedVR2Initializer._apply_weights(model, weights, quantize, weight_definition)
+        SeedVR2Initializer._apply_weights(model, weights, quantization, weight_definition)
 
     @staticmethod
     def _init_config(model, model_config: ModelConfig) -> None:
@@ -43,13 +44,19 @@ class SeedVR2Initializer:
         model.transformer = SeedVR2Transformer(**(model_config.transformer_overrides or {}))
 
     @staticmethod
-    def _apply_weights(model, weights: LoadedWeights, quantize: int | None, weight_definition) -> None:
-        model.bits = WeightApplier.apply_and_quantize(
+    def _apply_weights(
+        model,
+        weights: LoadedWeights,
+        quantization: QuantizationConfig,
+        weight_definition,
+    ) -> None:
+        quantization = WeightApplier.apply_and_quantize(
             weights=weights,
-            quantize_arg=quantize,
+            quantization=quantization,
             weight_definition=weight_definition,
             models={
                 "transformer": model.transformer,
                 "vae": model.vae,
             },
         )
+        WeightApplier.set_quantization_state(model, quantization)

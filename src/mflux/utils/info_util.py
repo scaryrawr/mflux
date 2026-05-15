@@ -1,6 +1,8 @@
 from datetime import datetime
 from pathlib import Path
 
+from mflux.models.common.resolution.quantization_config import QuantizationConfig
+
 
 class InfoUtil:
     @staticmethod
@@ -60,8 +62,15 @@ class InfoUtil:
                 lines.append(f"Guidance: {guidance}")
 
         # Technical settings
-        if quantize := exif.get("quantize"):
-            lines.append(f"Quantization: {quantize}-bit")
+        if exif.get("quantize") is not None:
+            lines.append(
+                "Quantization: "
+                + InfoUtil._format_quantization(
+                    bits=exif.get("quantize"),
+                    mode=exif.get("q_mode"),
+                    group_size=exif.get("q_group_size"),
+                )
+            )
         if precision := exif.get("precision"):
             lines.append(f"Precision: {precision}")
 
@@ -74,6 +83,8 @@ class InfoUtil:
             "original_steps",
             "original_guidance",
             "original_quantize",
+            "original_q_mode",
+            "original_q_group_size",
             "original_lora_paths",
             "original_lora_scales",
         ]
@@ -92,7 +103,14 @@ class InfoUtil:
             if (orig_guidance := exif.get("original_guidance")) is not None:
                 lines.append(f"  - Guidance: {orig_guidance}")
             if (orig_quantize := exif.get("original_quantize")) is not None:
-                lines.append(f"  - Quantization: {orig_quantize}-bit")
+                lines.append(
+                    "  - Quantization: "
+                    + InfoUtil._format_quantization(
+                        bits=orig_quantize,
+                        mode=exif.get("original_q_mode"),
+                        group_size=exif.get("original_q_group_size"),
+                    )
+                )
 
             if orig_lora_paths := exif.get("original_lora_paths"):
                 lines.append(f"  - LoRAs ({len(orig_lora_paths)}):")
@@ -143,3 +161,47 @@ class InfoUtil:
 
         lines.append("=" * 60)
         return "\n".join(lines)
+
+    @staticmethod
+    def _format_quantization(bits: object, mode: object = None, group_size: object = None) -> str:
+        try:
+            metadata_mode = InfoUtil._metadata_str(mode)
+            metadata_group_size = InfoUtil._metadata_int(group_size)
+            quantization = QuantizationConfig.from_request(
+                quantize=InfoUtil._metadata_int(bits),
+                q_mode=metadata_mode,
+                q_group_size=metadata_group_size,
+            )
+        except (TypeError, ValueError):
+            return InfoUtil._format_raw_quantization(bits, mode, group_size)
+
+        if not quantization.is_quantized:
+            return quantization.describe()
+
+        details = f"{quantization.bits}-bit"
+        if metadata_mode is not None:
+            details += f" {quantization.mode}"
+        if metadata_group_size is not None:
+            details += f" group-size {quantization.group_size}"
+        return details
+
+    @staticmethod
+    def _format_raw_quantization(bits: object, mode: object = None, group_size: object = None) -> str:
+        details = f"{bits}-bit"
+        if mode not in (None, "None", "null", ""):
+            details += f" {mode}"
+        if group_size not in (None, "None", "null", ""):
+            details += f" group-size {group_size}"
+        return details
+
+    @staticmethod
+    def _metadata_int(value: object) -> int | None:
+        if value in (None, "None", "null", ""):
+            return None
+        return int(value)
+
+    @staticmethod
+    def _metadata_str(value: object) -> str | None:
+        if value in (None, "None", "null", ""):
+            return None
+        return str(value)

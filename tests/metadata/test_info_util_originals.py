@@ -18,6 +18,8 @@ def test_info_util_includes_original_generation_section():
             "original_seed": 123,
             "original_steps": 9,
             "original_quantize": 8,
+            "original_q_mode": "mxfp8",
+            "original_q_group_size": 32,
             "original_lora_paths": ["/tmp/a.safetensors"],
             "original_lora_scales": [0.9],
         }
@@ -30,5 +32,25 @@ def test_info_util_includes_original_generation_section():
     assert "Width: 2896 (Original: 1440)" in output
     assert "Height: 2160 (Original: 1072)" in output
     assert "Steps: 1 (Original: 9)" in output
-    assert "Quantization: 8-bit" in output
+    assert "Quantization: 8-bit mxfp8 group-size 32" in output
     assert "a.safetensors" in output
+
+
+def test_info_util_formats_current_quantization_details():
+    metadata = {
+        "exif": {
+            "prompt": "test prompt",
+            "model": "Tongyi-MAI/Z-Image-Turbo",
+            "width": 1440,
+            "height": 1072,
+            "seed": 123,
+            "steps": 9,
+            "quantize": 4,
+            "q_mode": "mxfp4",
+            "q_group_size": 32,
+        }
+    }
+
+    output = InfoUtil.format_metadata(metadata)
+
+    assert "Quantization: 4-bit mxfp4 group-size 32" in output
