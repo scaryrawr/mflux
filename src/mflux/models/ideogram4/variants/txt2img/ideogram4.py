@@ -4,6 +4,7 @@ import mlx.core as mx
 from mlx import nn
 
 from mflux.models.common.config import Config, ModelConfig
+from mflux.models.common.resolution.quantization_config import QuantizationConfig
 from mflux.models.common.weights.saving.model_saver import ModelSaver
 from mflux.models.flux2.model.flux2_vae.vae import Flux2VAE
 from mflux.models.ideogram4.ideogram4_initializer import Ideogram4Initializer
@@ -31,11 +32,20 @@ class Ideogram4(nn.Module):
         model_config: ModelConfig = ModelConfig.ideogram4_fp8(),
         lora_paths: list[str] | None = None,
         lora_scales: list[float] | None = None,
+        *,
+        q_mode: str | None = None,
+        q_group_size: int | None = None,
+        quantization: QuantizationConfig | None = None,
     ):
         super().__init__()
+        quantization = quantization or QuantizationConfig.from_request(
+            quantize=quantize,
+            q_mode=q_mode,
+            q_group_size=q_group_size,
+        )
         Ideogram4Initializer.init(
             model=self,
-            quantize=quantize,
+            quantization=quantization,
             model_path=model_path,
             model_config=model_config,
             lora_paths=lora_paths,
@@ -147,7 +157,7 @@ class Ideogram4(nn.Module):
             config=config,
             seed=seed,
             prompt=prompt,
-            quantization=self.bits,
+            quantization=self.quantization,
             lora_paths=self.lora_paths,
             lora_scales=self.lora_scales,
             generation_time=time_steps.format_dict["elapsed"],
@@ -156,7 +166,7 @@ class Ideogram4(nn.Module):
     def save_model(self, base_path: str) -> None:
         ModelSaver.save_model(
             model=self,
-            bits=self.bits,
+            quantization=self.quantization,
             base_path=base_path,
             weight_definition=Ideogram4WeightDefinition,
         )

@@ -8,6 +8,7 @@ from mflux.callbacks.callback_registry import CallbackRegistry
 from mflux.models.common.config import ModelConfig
 from mflux.models.common.lora.mapping.lora_loader import LoRALoader
 from mflux.models.common.resolution.path_resolution import PathResolution
+from mflux.models.common.resolution.quantization_config import QuantizationConfig
 from mflux.models.common.tokenizer import TokenizerLoader
 from mflux.models.common.weights.loading.loaded_weights import LoadedWeights
 from mflux.models.common.weights.loading.weight_applier import WeightApplier
@@ -23,7 +24,7 @@ class Ideogram4Initializer:
     def init(
         model,
         model_config: ModelConfig,
-        quantize: int | None,
+        quantization: QuantizationConfig,
         model_path: str | None = None,
         lora_paths: list[str] | None = None,
         lora_scales: list[float] | None = None,
@@ -34,7 +35,7 @@ class Ideogram4Initializer:
         weights = Ideogram4Initializer._load_weights(root_path)
         Ideogram4Initializer._init_tokenizers(model, root_path)
         Ideogram4Initializer._init_models(model, root_path)
-        Ideogram4Initializer._apply_weights(model, weights, quantize)
+        Ideogram4Initializer._apply_weights(model, weights, quantization)
         del weights
         mx.eval(model)
         mx.clear_cache()
@@ -86,10 +87,10 @@ class Ideogram4Initializer:
         model.text_encoder = Qwen3TextEncoder(**Ideogram4Initializer._text_encoder_kwargs(model_path / "text_encoder"))
 
     @staticmethod
-    def _apply_weights(model, weights: LoadedWeights, quantize: int | None) -> None:
-        model.bits = WeightApplier.apply_and_quantize(
+    def _apply_weights(model, weights: LoadedWeights, quantization: QuantizationConfig) -> None:
+        quantization = WeightApplier.apply_and_quantize(
             weights=weights,
-            quantize_arg=quantize,
+            quantization=quantization,
             weight_definition=Ideogram4WeightDefinition,
             models={
                 "vae": model.vae,
@@ -98,6 +99,7 @@ class Ideogram4Initializer:
                 "text_encoder": model.text_encoder,
             },
         )
+        WeightApplier.set_quantization_state(model, quantization)
 
     @staticmethod
     def _apply_lora(model, lora_paths: list[str] | None, lora_scales: list[float] | None) -> None:

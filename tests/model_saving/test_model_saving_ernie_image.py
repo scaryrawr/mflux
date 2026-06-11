@@ -31,9 +31,9 @@ class TestErnieModelSaving:
             model_a.save_model(PATH)
             del model_a
 
-            _, quantization_level, mflux_version = WeightLoader._try_load_mflux_format(Path(PATH) / "vae")
-            assert mflux_version == VersionUtil.get_mflux_version()
-            assert quantization_level == 8
+            _, meta_data = WeightLoader._try_load_mflux_format(Path(PATH) / "vae")
+            assert meta_data.mflux_version == VersionUtil.get_mflux_version()
+            assert meta_data.quantization_level == 8
 
             model_b = ErnieImage(model_path=PATH, model_config=ModelConfig.ernie_image_turbo())
             image2 = model_b.generate_image(

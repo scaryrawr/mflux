@@ -9,6 +9,7 @@ import pytest
 
 from mflux.callbacks.callback_registry import CallbackRegistry
 from mflux.models.common.config import ModelConfig
+from mflux.models.common.resolution.quantization_config import QuantizationConfig
 from mflux.models.ideogram4.latent_creator import Ideogram4LatentCreator
 from mflux.models.ideogram4.model import Ideogram4Config, Ideogram4Transformer, Qwen3TextEncoder
 from mflux.models.ideogram4.model.ideogram4_scheduler import Ideogram4Scheduler
@@ -75,7 +76,10 @@ def _fake_ideogram4_model() -> Ideogram4:
     model.conditional_transformer = FakeTransformer()
     model.unconditional_transformer = FakeTransformer()
     model.vae = FakeVAE()
+    model.quantization = QuantizationConfig()
     model.bits = None
+    model.q_mode = None
+    model.q_group_size = None
     model.lora_paths = None
     model.lora_scales = None
     model.prompt_cache = {}

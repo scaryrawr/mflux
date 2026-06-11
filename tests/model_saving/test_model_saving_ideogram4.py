@@ -54,9 +54,9 @@ class TestIdeogram4ModelSaving:
             model_a.save_model(PATH)
             del model_a
 
-            _, quantization_level, mflux_version = WeightLoader._try_load_mflux_format(Path(PATH) / "vae")
-            assert mflux_version == VersionUtil.get_mflux_version()
-            assert quantization_level == 8
+            _, meta_data = WeightLoader._try_load_mflux_format(Path(PATH) / "vae")
+            assert meta_data.mflux_version == VersionUtil.get_mflux_version()
+            assert meta_data.quantization_level == 8
 
             model_b = Ideogram4(model_path=PATH, model_config=ModelConfig.ideogram4_fp8())
             image2 = model_b.generate_image(
