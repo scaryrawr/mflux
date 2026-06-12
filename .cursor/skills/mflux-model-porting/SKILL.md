@@ -159,6 +159,7 @@ Past [closed PRs](https://github.com/filipstrand/mflux/pulls?q=is%3Apr+is%3Aclos
 | `latent_creator` | `pack_latents` / `unpack_latents`; img2img path must match txt2img normalization (BN, scale factor) |
 | `tiling_config` | If initializer sets custom tiling, ensure `MemorySaver` does not overwrite it |
 | Guidance defaults | Distilled vs base: match `ModelConfig`, CLI default, README, and training preview adapter |
+| Quantization modes | Thread `QuantizationConfig` through public constructors, initializers, CLIs, save/load metadata, and image metadata; preserve support for `affine`, `mxfp4`/`nvfp4`, and `mxfp8` when adapting upstream code that only handles affine |
 | `mflux-save` round-trip | Save quantized model → load from local path → generate; confirm `model.safetensors.index.json` if sharded |
 
 ### Training (if supported)
