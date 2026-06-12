@@ -38,6 +38,7 @@ These rules exist to make agent work in this repo **predictable, verifiable, and
 - Keep CLI entrypoints thin: parse args, resolve config, construct the model, register callbacks, run, save.
 - Prefer extending existing shared abstractions over adding model-specific one-off paths unless the model truly needs a new abstraction.
 - Reuse shared plumbing before adding bespoke code paths: `CommandLineParser`, `ModelConfig`, `CallbackManager`, `DimensionResolver`, shared schedulers, and existing save/metadata helpers.
+- When adding or rebasing upstream model support, preserve this fork's `QuantizationConfig` support across public constructors, initializers, save/load metadata, and CLI paths. Upstream may only handle affine quantization; mflux must continue to support `affine`, `mxfp4`, and `mxfp8`.
 - Keep public model APIs small and obvious; prefer a clear top-level method like `generate_image(...)` with implementation details pushed into private helpers.
 - Keep one clear source of truth for model defaults and reflect those defaults consistently in CLI behavior, Python API examples, and README docs.
 - Treat README examples as part of the API contract. If behavior, defaults, or flags change, update the relevant examples in the same pass.
@@ -86,4 +87,3 @@ Fix: Validate preview image at config load.
 - Use `mflux-model-porting` when porting models into MLX.
 - Use `mflux-release` for release preparation steps.
 - Use `mflux-pr` for preparing clean PRs.
-
