@@ -3,6 +3,7 @@ import sys
 
 import pytest
 
+from mflux.models.common.config import ModelConfig
 from mflux.models.common.resolution.quantization_config import QuantizationConfig
 from mflux.models.depth_pro.model.depth_pro import DepthPro
 from mflux.models.ernie_image.ernie_image_initializer import ErnieImageInitializer
@@ -21,6 +22,7 @@ from mflux.models.flux.variants.in_context.flux_in_context_fill import Flux1InCo
 from mflux.models.flux.variants.kontext.flux_kontext import Flux1Kontext
 from mflux.models.flux.variants.redux.flux_redux import Flux1Redux
 from mflux.models.flux.variants.txt2img.flux import Flux1
+from mflux.models.flux2.flux2_initializer import Flux2Initializer
 from mflux.models.flux2.variants.edit.flux2_klein_edit import Flux2KleinEdit
 from mflux.models.flux2.variants.txt2img.flux2_klein import Flux2Klein
 from mflux.models.ideogram4.ideogram4_initializer import Ideogram4Initializer
@@ -112,6 +114,45 @@ def test_ideogram4_forwards_quantization_mode_kwargs(monkeypatch):
 
 
 @pytest.mark.fast
+@pytest.mark.parametrize(
+    ("model_class", "quantize", "q_mode", "q_group_size", "expected"),
+    [
+        (Flux2Klein, 4, "affine", 64, QuantizationConfig(bits=4, mode="affine", group_size=64)),
+        (Flux2Klein, None, "mxfp4", 32, QuantizationConfig(bits=4, mode="mxfp4", group_size=32)),
+        (Flux2Klein, None, "mxfp8", 32, QuantizationConfig(bits=8, mode="mxfp8", group_size=32)),
+        (Flux2KleinEdit, 4, "affine", 64, QuantizationConfig(bits=4, mode="affine", group_size=64)),
+        (Flux2KleinEdit, None, "mxfp4", 32, QuantizationConfig(bits=4, mode="mxfp4", group_size=32)),
+        (Flux2KleinEdit, None, "mxfp8", 32, QuantizationConfig(bits=8, mode="mxfp8", group_size=32)),
+    ],
+)
+def test_flux2_klein_kv_forwards_quantization_modes(
+    monkeypatch,
+    model_class,
+    quantize,
+    q_mode,
+    q_group_size,
+    expected,
+):
+    captured = {}
+
+    def fake_init(**kwargs):
+        captured["model_config"] = kwargs["model_config"]
+        captured["quantization"] = kwargs["quantization"]
+
+    monkeypatch.setattr(Flux2Initializer, "init", staticmethod(fake_init))
+
+    model_class(
+        model_config=ModelConfig.flux2_klein_9b_kv(),
+        quantize=quantize,
+        q_mode=q_mode,
+        q_group_size=q_group_size,
+    )
+
+    assert captured["model_config"].supports_kv_cache is True
+    assert captured["quantization"] == expected
+
+
+@pytest.mark.fast
 def test_save_cli_forwards_ernie_quantization_config(monkeypatch, tmp_path):
     from mflux.models.common.cli import save
 
@@ -148,6 +189,46 @@ def test_save_cli_forwards_ernie_quantization_config(monkeypatch, tmp_path):
     assert "q_mode" not in captured["model_kwargs"]
     assert "q_group_size" not in captured["model_kwargs"]
     assert captured["save_path"] == str(tmp_path / "ernie-mxfp8")
+
+
+@pytest.mark.fast
+def test_save_cli_forwards_flux2_kv_quantization_config(monkeypatch, tmp_path):
+    from mflux.models.common.cli import save
+
+    captured = {}
+
+    class FakeFlux2Klein:
+        def __init__(self, **kwargs) -> None:
+            captured["model_kwargs"] = kwargs
+
+        def save_model(self, path: str) -> None:
+            captured["save_path"] = path
+
+    monkeypatch.setattr(save, "Flux2Klein", FakeFlux2Klein)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "mflux-save",
+            "--model",
+            "flux2-klein-9b-kv",
+            "--q-mode",
+            "mxfp8",
+            "--q-group-size",
+            "32",
+            "--path",
+            str(tmp_path / "flux2-klein-9b-kv-mxfp8"),
+        ],
+    )
+
+    save.main()
+
+    assert captured["model_kwargs"]["model_config"] is ModelConfig.flux2_klein_9b_kv()
+    assert captured["model_kwargs"]["quantization"] == QuantizationConfig(bits=8, mode="mxfp8", group_size=32)
+    assert "quantize" not in captured["model_kwargs"]
+    assert "q_mode" not in captured["model_kwargs"]
+    assert "q_group_size" not in captured["model_kwargs"]
+    assert captured["save_path"] == str(tmp_path / "flux2-klein-9b-kv-mxfp8")
 
 
 @pytest.mark.fast
