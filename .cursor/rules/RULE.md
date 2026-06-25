@@ -54,6 +54,7 @@ These rules exist to make agent work in this repo **predictable, verifiable, and
 - Committing locally is fine and encouraged for progress tracking.
 - Before any major squash/rewrite of local branch history, create a **local backup branch** at the current `HEAD` first (for example `backup/<branch>-pre-squash-YYYYMMDD-HHMM` so repeated backups stay unique to the minute).
 - That backup branch is intentionally **local-only** for safety and rollback; do not push it unless the user explicitly asks.
+- When rebasing, watch for Git's `--update-refs` behavior rewriting `backup/*` refs; if it happens, restore those backup branch tips from their reflogs before finishing.
 
 ## Agent workflow norms (modern Cursor best practices)
 
