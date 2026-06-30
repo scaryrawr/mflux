@@ -30,6 +30,8 @@ def main():
     model = ErnieImage(
         model_config=ModelConfig.ernie_image(),
         quantize=args.quantize,
+        q_mode=args.q_mode,
+        q_group_size=args.q_group_size,
         model_path=args.model_path,
         lora_paths=args.lora_paths,
         lora_scales=args.lora_scales,

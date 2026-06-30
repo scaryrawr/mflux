@@ -48,6 +48,8 @@ def main():
     model = Ideogram4(
         model_config=model_config,
         quantize=args.quantize,
+        q_mode=args.q_mode,
+        q_group_size=args.q_group_size,
         model_path=model_path,
         lora_paths=args.lora_paths,
         lora_scales=args.lora_scales,

@@ -232,6 +232,60 @@ def test_save_cli_forwards_flux2_kv_quantization_config(monkeypatch, tmp_path):
 
 
 @pytest.mark.fast
+@pytest.mark.parametrize(
+    ("module_name", "model_attr", "command"),
+    [
+        ("mflux.models.ernie_image.cli.ernie_image_generate", "ErnieImage", "mflux-generate-ernie"),
+        ("mflux.models.ernie_image.cli.ernie_image_turbo_generate", "ErnieImage", "mflux-generate-ernie-turbo"),
+        ("mflux.models.ideogram4.cli.ideogram4_generate", "Ideogram4", "mflux-generate-ideogram4"),
+    ],
+)
+def test_new_model_clis_forward_quantization_mode_kwargs(monkeypatch, module_name, model_attr, command):
+    import importlib
+
+    module = importlib.import_module(module_name)
+    captured = {}
+
+    class FakeModel:
+        def __init__(self, **kwargs) -> None:
+            captured["model_kwargs"] = kwargs
+
+        def generate_image(self, **kwargs):
+            captured["generate_kwargs"] = kwargs
+            return self
+
+        def save(self, **kwargs) -> None:
+            captured["save_kwargs"] = kwargs
+
+    monkeypatch.setattr(module, model_attr, FakeModel)
+    monkeypatch.setattr(module.CallbackManager, "register_callbacks", lambda **kwargs: None)
+    monkeypatch.setattr(module.DimensionResolver, "resolve", lambda **kwargs: (64, 64))
+    monkeypatch.setattr(module.PromptUtil, "read_prompt", lambda args: "test prompt")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            command,
+            "--prompt",
+            "test prompt",
+            "--seed",
+            "1",
+            "--steps",
+            "1",
+            "--q-mode",
+            "mxfp8",
+            "--q-group-size",
+            "32",
+        ],
+    )
+
+    module.main()
+
+    assert captured["model_kwargs"]["q_mode"] == "mxfp8"
+    assert captured["model_kwargs"]["q_group_size"] == 32
+
+
+@pytest.mark.fast
 def test_flux_from_name_forwards_quantization_mode_kwargs(monkeypatch):
     captured = {}
 
