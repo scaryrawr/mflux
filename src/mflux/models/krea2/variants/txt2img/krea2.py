@@ -6,6 +6,7 @@ from mlx import nn
 from mflux.models.common.config import ModelConfig
 from mflux.models.common.config.config import Config
 from mflux.models.common.latent_creator.latent_creator import LatentCreator
+from mflux.models.common.resolution.quantization_config import QuantizationConfig
 from mflux.models.common.weights.saving.model_saver import ModelSaver
 from mflux.models.krea2.krea2_initializer import Krea2Initializer
 from mflux.models.krea2.latent_creator.krea2_latent_creator import Krea2LatentCreator
@@ -33,12 +34,21 @@ class Krea2(nn.Module):
         model_config: ModelConfig | None = None,
         lora_paths: list[str] | None = None,
         lora_scales: list[float] | None = None,
+        *,
+        q_mode: str | None = None,
+        q_group_size: int | None = None,
+        quantization: QuantizationConfig | None = None,
     ):
         super().__init__()
+        quantization = quantization or QuantizationConfig.from_request(
+            quantize=quantize,
+            q_mode=q_mode,
+            q_group_size=q_group_size,
+        )
         Krea2Initializer.init(
             model=self,
             model_config=model_config or ModelConfig.krea2(),
-            quantize=quantize,
+            quantization=quantization,
             model_path=model_path,
             lora_paths=lora_paths,
             lora_scales=lora_scales,
@@ -119,7 +129,7 @@ class Krea2(nn.Module):
     def save_model(self, base_path: str) -> None:
         ModelSaver.save_model(
             model=self,
-            bits=self.bits,
+            quantization=self.quantization,
             base_path=base_path,
             weight_definition=Krea2WeightDefinition,
         )

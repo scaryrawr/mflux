@@ -27,6 +27,8 @@ from mflux.models.flux2.variants.edit.flux2_klein_edit import Flux2KleinEdit
 from mflux.models.flux2.variants.txt2img.flux2_klein import Flux2Klein
 from mflux.models.ideogram4.ideogram4_initializer import Ideogram4Initializer
 from mflux.models.ideogram4.variants.txt2img.ideogram4 import Ideogram4
+from mflux.models.krea2.krea2_initializer import Krea2Initializer
+from mflux.models.krea2.variants.txt2img.krea2 import Krea2
 from mflux.models.qwen.variants.edit.qwen_image_edit import QwenImageEdit
 from mflux.models.qwen.variants.txt2img.qwen_image import QwenImage
 from mflux.models.seedvr2.variants.upscale.seedvr2 import SeedVR2
@@ -56,6 +58,7 @@ from mflux.models.z_image.z_image_initializer import ZImageInitializer
         Flux2Klein,
         Flux2KleinEdit,
         Ideogram4,
+        Krea2,
         QwenImage,
         QwenImageEdit,
         SeedVR2,
@@ -111,6 +114,20 @@ def test_ideogram4_forwards_quantization_mode_kwargs(monkeypatch):
     Ideogram4(q_mode="mxfp8", q_group_size=32)
 
     assert captured["quantization"] == QuantizationConfig(bits=8, mode="mxfp8", group_size=32)
+
+
+@pytest.mark.fast
+def test_krea2_forwards_quantization_mode_kwargs(monkeypatch):
+    captured = {}
+
+    def fake_init(**kwargs):
+        captured["quantization"] = kwargs["quantization"]
+
+    monkeypatch.setattr(Krea2Initializer, "init", staticmethod(fake_init))
+
+    Krea2(q_mode="mxfp4", q_group_size=32)
+
+    assert captured["quantization"] == QuantizationConfig(bits=4, mode="mxfp4", group_size=32)
 
 
 @pytest.mark.fast
@@ -283,6 +300,53 @@ def test_new_model_clis_forward_quantization_mode_kwargs(monkeypatch, module_nam
 
     assert captured["model_kwargs"]["q_mode"] == "mxfp8"
     assert captured["model_kwargs"]["q_group_size"] == 32
+
+
+@pytest.mark.fast
+def test_krea2_cli_forwards_quantization_config(monkeypatch):
+    import mflux.models.krea2.cli.krea2_generate as module
+
+    captured = {}
+
+    class FakeKrea2:
+        def __init__(self, **kwargs) -> None:
+            captured["model_kwargs"] = kwargs
+
+        def generate_image(self, **kwargs):
+            captured["generate_kwargs"] = kwargs
+            return self
+
+        def save(self, **kwargs) -> None:
+            captured["save_kwargs"] = kwargs
+
+    monkeypatch.setattr(module, "Krea2", FakeKrea2)
+    monkeypatch.setattr(module.CallbackManager, "register_callbacks", lambda **kwargs: None)
+    monkeypatch.setattr(module.DimensionResolver, "resolve", lambda **kwargs: (64, 64))
+    monkeypatch.setattr(module.PromptUtil, "read_prompt", lambda args: "test prompt")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "mflux-generate-krea2",
+            "--prompt",
+            "test prompt",
+            "--seed",
+            "1",
+            "--steps",
+            "1",
+            "--q-mode",
+            "mxfp8",
+            "--q-group-size",
+            "32",
+        ],
+    )
+
+    module.main()
+
+    assert captured["model_kwargs"]["quantization"] == QuantizationConfig(bits=8, mode="mxfp8", group_size=32)
+    assert "quantize" not in captured["model_kwargs"]
+    assert "q_mode" not in captured["model_kwargs"]
+    assert "q_group_size" not in captured["model_kwargs"]
 
 
 @pytest.mark.fast
