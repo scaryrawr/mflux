@@ -136,30 +136,11 @@ class PathResolution:
     def _is_snapshot_complete(
         snapshot_path: Path, required_subdirs: set[str], patterns: list[str] | None = None
     ) -> bool:
+        if patterns:
+            return all(PathResolution._has_valid_pattern_match(snapshot_path, pattern) for pattern in patterns)
+
         if not required_subdirs:
-            # No specific subdirs required - check that all patterns are satisfied
-            if patterns:
-                for pattern in patterns:
-                    # Check if this specific pattern has any matches
-                    matches = list(snapshot_path.glob(pattern))
-                    if not matches:
-                        return False
-                    # Verify at least one match actually exists (handles broken symlinks)
-                    has_valid_match = False
-                    for match in matches:
-                        if match.is_symlink():
-                            if os.path.exists(match):
-                                has_valid_match = True
-                                break
-                        else:
-                            has_valid_match = True
-                            break
-                    if not has_valid_match:
-                        return False
-                return True
-            else:
-                # Fallback: just check for any safetensors
-                return any(snapshot_path.glob("**/*.safetensors"))
+            return any(snapshot_path.glob("**/*.safetensors"))
 
         for subdir in required_subdirs:
             subdir_path = snapshot_path / subdir
@@ -181,3 +162,13 @@ class PathResolution:
                 return False
 
         return True
+
+    @staticmethod
+    def _has_valid_pattern_match(snapshot_path: Path, pattern: str) -> bool:
+        for match in snapshot_path.glob(pattern):
+            if match.is_symlink():
+                if os.path.exists(match):
+                    return True
+            else:
+                return True
+        return False

@@ -110,6 +110,47 @@ class TestPathResolutionHuggingFace:
         call_kwargs = mock_download.call_args[1]
         assert call_kwargs["allow_patterns"] == ["*.bin", "*.json"]
 
+    @pytest.mark.fast
+    @patch("mflux.models.common.resolution.path_resolution.snapshot_download")
+    def test_cached_snapshot_missing_exact_root_pattern_downloads_again(self, mock_download, tmp_path):
+        repo_cache = tmp_path / "models--org--model" / "snapshots" / "abc123"
+        (repo_cache / "vae").mkdir(parents=True)
+        (repo_cache / "text_encoder").mkdir()
+        (repo_cache / "tokenizer").mkdir()
+        (repo_cache / "vae" / "weights.safetensors").touch()
+        (repo_cache / "text_encoder" / "model.safetensors").touch()
+        (repo_cache / "tokenizer" / "tokenizer.json").touch()
+        downloaded = tmp_path / "downloaded"
+        mock_download.return_value = str(downloaded)
+
+        patterns = ["turbo.safetensors", "vae/*.safetensors", "text_encoder/*.safetensors", "tokenizer/**"]
+        with patch("mflux.models.common.resolution.path_resolution.HF_HUB_CACHE", str(tmp_path)):
+            result = PathResolution.resolve(path="org/model", patterns=patterns)
+
+        assert result == downloaded
+        call_kwargs = mock_download.call_args[1]
+        assert "local_files_only" not in call_kwargs
+        assert call_kwargs["allow_patterns"] == patterns
+
+    @pytest.mark.fast
+    @patch("mflux.models.common.resolution.path_resolution.snapshot_download")
+    def test_cached_snapshot_with_exact_root_pattern_uses_cache(self, mock_download, tmp_path):
+        repo_cache = tmp_path / "models--org--model" / "snapshots" / "abc123"
+        (repo_cache / "vae").mkdir(parents=True)
+        (repo_cache / "text_encoder").mkdir()
+        (repo_cache / "tokenizer").mkdir()
+        (repo_cache / "turbo.safetensors").touch()
+        (repo_cache / "vae" / "weights.safetensors").touch()
+        (repo_cache / "text_encoder" / "model.safetensors").touch()
+        (repo_cache / "tokenizer" / "tokenizer.json").touch()
+
+        patterns = ["turbo.safetensors", "vae/*.safetensors", "text_encoder/*.safetensors", "tokenizer/**"]
+        with patch("mflux.models.common.resolution.path_resolution.HF_HUB_CACHE", str(tmp_path)):
+            result = PathResolution.resolve(path="org/model", patterns=patterns)
+
+        assert result == repo_cache
+        mock_download.assert_not_called()
+
 
 class TestPathResolutionError:
     @pytest.mark.fast
