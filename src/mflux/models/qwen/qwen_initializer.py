@@ -26,6 +26,7 @@ class QwenImageInitializer:
         model_path: str | None = None,
         lora_paths: list[str] | None = None,
         lora_scales: list[float] | None = None,
+        bake_lora: bool = True,
     ) -> None:
         path = model_path if model_path else model_config.model_name
         QwenImageInitializer._init_config(model, model_config)
@@ -33,7 +34,7 @@ class QwenImageInitializer:
         QwenImageInitializer._init_tokenizers(model, path)
         QwenImageInitializer._init_models(model)
         QwenImageInitializer._apply_weights(model, weights, quantization)
-        QwenImageInitializer._apply_lora(model, lora_paths, lora_scales)
+        QwenImageInitializer._apply_lora(model, lora_paths, lora_scales, bake_lora)
 
     @staticmethod
     def init_edit(
@@ -43,6 +44,7 @@ class QwenImageInitializer:
         model_path: str | None = None,
         lora_paths: list[str] | None = None,
         lora_scales: list[float] | None = None,
+        bake_lora: bool = True,
     ) -> None:
         # Use model_path if provided, otherwise fall back to model_config.model_name
         path = model_path if model_path else model_config.model_name
@@ -51,7 +53,7 @@ class QwenImageInitializer:
         QwenImageInitializer._init_tokenizers(model, path)
         QwenImageInitializer._init_edit_models(model)
         QwenImageInitializer._apply_weights(model, weights, quantization)
-        QwenImageInitializer._apply_lora(model, lora_paths, lora_scales)
+        QwenImageInitializer._apply_lora(model, lora_paths, lora_scales, bake_lora)
 
         # Add vision-language tokenizer
         raw_tokenizer = model.tokenizers["qwen"].tokenizer
@@ -116,10 +118,16 @@ class QwenImageInitializer:
         WeightApplier.set_quantization_state(model, quantization)
 
     @staticmethod
-    def _apply_lora(model, lora_paths: list[str] | None, lora_scales: list[float] | None) -> None:
+    def _apply_lora(
+        model,
+        lora_paths: list[str] | None,
+        lora_scales: list[float] | None,
+        bake_lora: bool,
+    ) -> None:
         model.lora_paths, model.lora_scales = LoRALoader.load_and_apply_lora(
             lora_mapping=QwenLoRAMapping.get_mapping(),
             transformer=model.transformer,
             lora_paths=lora_paths,
             lora_scales=lora_scales,
+            bake_lora=bake_lora,
         )

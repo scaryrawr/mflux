@@ -33,6 +33,7 @@ class FIBOEdit(nn.Module):
         model_path: str | None = None,
         lora_paths: list[str] | None = None,
         lora_scales: list[float] | None = None,
+        bake_lora: bool = True,
         model_config: ModelConfig = ModelConfig.fibo_edit(),
         *,
         q_mode: str | None = None,

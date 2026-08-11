@@ -22,6 +22,7 @@ class Flux2Initializer:
         model_path: str | None = None,
         lora_paths: list[str] | None = None,
         lora_scales: list[float] | None = None,
+        bake_lora: bool = True,
     ) -> None:
         path = model_path if model_path else model_config.model_name
         Flux2Initializer._init_config(model, model_config)
@@ -29,7 +30,7 @@ class Flux2Initializer:
         Flux2Initializer._init_tokenizers(model, path)
         Flux2Initializer._init_models(model)
         Flux2Initializer._apply_weights(model, weights, quantization)
-        Flux2Initializer._apply_lora(model, lora_paths, lora_scales)
+        Flux2Initializer._apply_lora(model, lora_paths, lora_scales, bake_lora)
 
     @staticmethod
     def _init_config(model, model_config: ModelConfig) -> None:
@@ -77,10 +78,16 @@ class Flux2Initializer:
         WeightApplier.set_quantization_state(model, quantization)
 
     @staticmethod
-    def _apply_lora(model, lora_paths: list[str] | None, lora_scales: list[float] | None) -> None:
+    def _apply_lora(
+        model,
+        lora_paths: list[str] | None,
+        lora_scales: list[float] | None,
+        bake_lora: bool,
+    ) -> None:
         model.lora_paths, model.lora_scales = LoRALoader.load_and_apply_lora(
             lora_mapping=Flux2LoRAMapping.get_mapping(),
             transformer=model.transformer,
             lora_paths=lora_paths,
             lora_scales=lora_scales,
+            bake_lora=bake_lora,
         )

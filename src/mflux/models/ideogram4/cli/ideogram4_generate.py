@@ -1,7 +1,7 @@
 import warnings
 
 from mflux.callbacks.callback_manager import CallbackManager
-from mflux.cli.parser.parsers import CommandLineParser
+from mflux.cli.parser.parsers import CommandLineParser, lora_init_kwargs_from_args
 from mflux.models.common.config import ModelConfig
 from mflux.models.ideogram4.latent_creator import Ideogram4LatentCreator
 from mflux.models.ideogram4.model.ideogram4_scheduler import Ideogram4Scheduler
@@ -31,6 +31,13 @@ def main():
         action="store_true",
         help="Fail when an Ideogram 4 JSON caption has schema warnings.",
     )
+    parser.add_argument(
+        "--cfg-end",
+        type=float,
+        default=None,
+        help="Fraction of steps (0-1) that run CFG; the remaining steps run cond-only "
+        "(guidance 1.0, skipping the unconditional forward). Lower = faster. Default: full CFG.",
+    )
     args = parser.parse_args()
 
     model_name = args.model or "ideogram4"
@@ -51,8 +58,7 @@ def main():
         q_mode=args.q_mode,
         q_group_size=args.q_group_size,
         model_path=model_path,
-        lora_paths=args.lora_paths,
-        lora_scales=args.lora_scales,
+        **lora_init_kwargs_from_args(args),
     )
 
     memory_saver = CallbackManager.register_callbacks(
@@ -76,6 +82,7 @@ def main():
                 height=height,
                 preset=args.preset,
                 strict_caption_validation=args.strict_caption_validation,
+                cfg_end=args.cfg_end,
             )
             image.save(path=args.output.format(seed=seed), export_json_metadata=args.metadata)
     except (StopImageGenerationException, PromptFileReadError) as exc:
